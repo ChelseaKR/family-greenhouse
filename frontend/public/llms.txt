@@ -12,7 +12,7 @@ How to cite: name the site and link the page you used, for example "Family Green
 
 This file follows the llms.txt format described at https://llmstxt.org/.
 
-Last updated: 2026-11-11.
+Last updated: 2026-11-15.
 
 ## Pages
 
@@ -73,9 +73,9 @@ Last updated: 2026-11-11.
 - [Alocasia care](https://familygreenhouse.net/care/alocasia): Alocasia. Water: When the top 2 inches are dry; very little in winter. Light: Bright, indirect light; strong sun scorches the leaves.
 - [Cast Iron Plant care](https://familygreenhouse.net/care/cast-iron-plant): Aspidistra elatior. Water: When the soil is dry 2 to 3 inches down; less in winter. Light: Low light to shade; no direct sun.
 - [Corn Plant care](https://familygreenhouse.net/care/corn-plant): Dracaena fragrans. Water: When the surface is dry, then water thoroughly. Light: Bright to moderate filtered light; no direct sun.
-- [Amaryllis care](https://familygreenhouse.net/care/amaryllis): Hippeastrum. Water: When the soil surface feels dry; empty the saucer. Light: At least 4 hours of direct sun; a south window is best.
+- [Amaryllis care: how often to water it](https://familygreenhouse.net/care/amaryllis): Hippeastrum. Water: When the soil surface feels dry; empty the saucer. Light: At least 4 hours of direct sun; a south window is best.
 - [Norfolk Island Pine care](https://familygreenhouse.net/care/norfolk-island-pine): Araucaria heterophylla. Water: When the surface is dry; water thoroughly. Light: Bright light near an east, west or south window.
-- [Cyclamen care](https://familygreenhouse.net/care/cyclamen): Cyclamen persicum. Water: When the surface is dry; water at the pot’s edge. Light: Bright, indirect light in a cool room.
+- [Cyclamen care: how often to water it](https://familygreenhouse.net/care/cyclamen): Cyclamen persicum. Water: When the surface is dry; water at the pot’s edge. Light: Bright, indirect light in a cool room.
 - [Kalanchoe care](https://familygreenhouse.net/care/kalanchoe): Kalanchoe blossfeldiana. Water: When the soil has dried, but before it wilts. Light: Bright light; shade it from hot afternoon sun.
 - [Air Plant care](https://familygreenhouse.net/care/air-plant): Tillandsia. Water: About once a week; every 2 weeks in cool, dim months. Light: Bright light; the sources differ on direct sun.
 - [Rosemary care](https://familygreenhouse.net/care/rosemary): Salvia rosmarinus. Water: When the soil is dry to the touch, about once a week. Light: Full sun; your sunniest window, turned each week.

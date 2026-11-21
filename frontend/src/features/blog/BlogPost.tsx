@@ -9,6 +9,7 @@ import { DEFAULT_OG_IMAGE } from '@/config/seo';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { formatContentDate } from '@/utils/contentDate';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
+import REDIRECTS from '@/config/redirects.json';
 
 /**
  * Single-post page. The post itself is a self-contained TSX component;
@@ -31,9 +32,14 @@ export function BlogPost() {
           description: post.metaDescription ?? post.description,
           canonical: `${SITE_URL}/blog/${post.slug}`,
           ogType: 'article',
-          // Only publishedTime: the manifest has no `modified` field, so
-          // there is no honest value for article:modified_time.
-          article: { publishedTime: post.date, section: 'Blog' },
+          // modifiedTime only for a post that has changed since it was
+          // published (`updated` in the manifest); an unedited post has no
+          // second date to give.
+          article: {
+            publishedTime: post.date,
+            ...(post.updated ? { modifiedTime: post.updated } : {}),
+            section: 'Blog',
+          },
           // Article schema makes the post eligible for Google's article
           // rich-results treatment. Publisher logo and `image` are both set
           // below; a per-post hero image and a named Person author are the
@@ -61,8 +67,19 @@ export function BlogPost() {
                   height: 630,
                 },
                 datePublished: post.date,
-                dateModified: post.date,
-                author: { '@type': 'Organization', name: 'Family Greenhouse' },
+                // The date the post's content last changed, which is also its
+                // sitemap <lastmod> (public-routes.mjs reads the same field).
+                // It was `post.date`, so every edited post published a
+                // dateModified older than its own text.
+                dateModified: post.updated ?? post.date,
+                // One Organization with `publisher` (same @id), plus the
+                // `url` Google's Article guidance asks an author to carry.
+                author: {
+                  '@type': 'Organization',
+                  '@id': `${SITE_URL}/#organization`,
+                  name: 'Family Greenhouse',
+                  url: SITE_URL,
+                },
                 publisher: {
                   '@type': 'Organization',
                   // Same @id the homepage graph defines for this entity, so
@@ -98,7 +115,10 @@ export function BlogPost() {
   );
 
   if (!post) {
-    return <Navigate to="/blog" replace />;
+    // A post merged into another (src/config/redirects.json) goes to the post
+    // that absorbed it, the same place the edge's 301 sends a fresh request.
+    const moved = (REDIRECTS as Record<string, string>)[`/blog/${slug?.toLowerCase()}`];
+    return <Navigate to={moved ?? '/blog'} replace />;
   }
 
   const Body = post.Component;
@@ -114,7 +134,7 @@ export function BlogPost() {
   ).filter((p) => p !== undefined);
 
   return (
-    <PublicShell width="article">
+    <PublicShell width="article" contentLang="en">
       <Link
         to="/blog"
         className="inline-flex items-center gap-1 text-sm font-medium text-primary-700 hover:underline"
@@ -124,8 +144,22 @@ export function BlogPost() {
       </Link>
 
       <header className="mt-6 mb-10">
-        <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary-700">
-          {formatContentDate(post.date)} · {post.readingMinutes} min read
+        {/* The publish date, then the date the post last changed when that
+            is later. The second date is the one the Article markup and the
+            sitemap publish (`updated` in the manifest), so a reader sees the
+            same date a crawler does. */}
+        <p
+          data-testid="post-dates"
+          className="text-xs font-medium uppercase tracking-[0.2em] text-primary-700"
+        >
+          {formatContentDate(post.date)}
+          {post.updated && post.updated !== post.date && (
+            <>
+              {' '}
+              · Updated <time dateTime={post.updated}>{formatContentDate(post.updated)}</time>
+            </>
+          )}{' '}
+          · {post.readingMinutes} min read
         </p>
         <h1 className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl">
           {post.title}

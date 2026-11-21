@@ -2,9 +2,9 @@
  * What a new subscription checkout gives before its first charge.
  *
  * Pure: no Stripe, no DynamoDB. `services/billing.ts` applies it to a
- * Checkout Session and publishes it on GET /billing/me, and the no-card-trial
- * emails (`services/trialLifecycleEmailCopy.ts`) use the same constants to
- * name the same first-charge date.
+ * Checkout Session and publishes it on GET /billing/me. (The no-card-trial
+ * emails used to name this first-charge date too; since 2026-11-19 they name
+ * no price or charge at all, ADR 0039 §7.)
  */
 
 /** Length of the free trial offered on a household's FIRST paid subscription. */
@@ -55,9 +55,9 @@ export const CHECKOUT_TRIAL_END_MIN_LEAD_MS =
  *     `CHECKOUT_TRIAL_END_MIN_LEAD_MS`.
  *
  * A `noCardTrialEndsAt` that does not parse is read as absent, the same way
- * `noCardTrialState` in models/plans.ts reads it. Only household creation
- * writes that attribute, always as an ISO date, so the case is a row edited
- * by hand.
+ * `noCardTrialState` in models/plans.ts reads it. Only household creation and
+ * the operator-run outage restart (`services/outageTrialRestart.ts`) write
+ * that attribute, always as an ISO date, so the case is a row edited by hand.
  *
  * Pure. `createCheckoutSession` and `getHouseholdSubscription` both call it on
  * the same row, so what Settings → Billing says and what Stripe is asked for

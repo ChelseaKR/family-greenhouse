@@ -16,7 +16,11 @@
       "Store payment rules" and "In-App Purchase".
 - [ ] In-App Purchase, if this build sells through the App Store: the App
       Store Connect subscription group and both products exist and are
-      attached to the version, the server switch is on in production, the
+      attached to the version, the server switch is on in production,
+      production accepts Sandbox for the review
+      (`app_store_environments = "Production,Sandbox"` deployed before the
+      TestFlight check, and set back to `"Production"` in the first release
+      after approval; ADR 0045), the
       App Store Server Notifications v2 URL is set for Production and
       Sandbox, the build was made with `VITE_APP_STORE_PURCHASES=true`, a
       Sandbox purchase and a restore were checked on a device, and the Terms
@@ -103,7 +107,9 @@ frontend`) and carries the real Team ID; `npm run aasa:check` and
       doesn't include the aps-environment entitlement", enable it by hand
       under Certificates, Identifiers & Profiles → Identifiers →
       `net.familygreenhouse.app`.
-- [ ] Physical iPhone, iPad, and Android smoke tests pass against production.
+- [ ] Physical iPhone and Android smoke tests pass against production. The
+      iOS app is iPhone-only (ADR 0043), so on an iPad check it once in iPhone
+      compatibility mode: App Review can open it there.
 
 ## Build and test
 

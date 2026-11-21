@@ -300,17 +300,19 @@ describe('caretaker public surface', () => {
     entitleSeedHousehold();
     const auth = await loginAsSeed();
     const seat = await createSeat(auth);
+    const photoBytes = Buffer.from('fake-jpeg-bytes');
 
     const grant = await request(app)
       .post(`/caretaker/${seat.token}/plants/${seedPlantId}/photo`)
-      .send({ contentType: 'image/jpeg' });
+      .send({ contentType: 'image/jpeg', contentLength: photoBytes.length });
     expect(grant.status).toBe(200);
+    expect(grant.body.imageUrl).toContain(`/uploads/${seedHouseholdId}/${seedPlantId}/`);
 
     const uploadPath = new URL(grant.body.uploadUrl).pathname;
     const put = await request(app)
       .put(uploadPath)
       .set('Content-Type', 'image/jpeg')
-      .send(Buffer.from('fake-jpeg-bytes'));
+      .send(photoBytes);
     expect(put.status).toBeLessThan(300);
 
     const confirm = await request(app)
@@ -318,6 +320,15 @@ describe('caretaker public surface', () => {
       .send({ imageUrl: grant.body.imageUrl });
     expect(confirm.status).toBe(200);
     expect(confirm.body.photo.uploadedBy).toBe(`caretaker:${seat.id}`);
+    // The photo is the server's own copy under plants/, not the upload.
+    expect(confirm.body.imageUrl).toContain(`/plants/${seedHouseholdId}/${seedPlantId}/`);
+    expect(confirm.body.photo.imageUrl).toBe(confirm.body.imageUrl);
+
+    // A request that does not declare a size is given no upload URL.
+    const unsized = await request(app)
+      .post(`/caretaker/${seat.token}/plants/${seedPlantId}/photo`)
+      .send({ contentType: 'image/jpeg' });
+    expect(unsized.status).toBe(400);
 
     const otherAuth = await createUserWithHousehold('neighbour2@example.com', 'Next door');
     const plant = await request(app)

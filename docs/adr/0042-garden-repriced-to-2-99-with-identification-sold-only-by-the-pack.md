@@ -102,10 +102,10 @@ nothing is written to storage and nothing is sent anywhere. Greenhouse sells no 
 on the Yearly tab its card shows its monthly price with the note "Billed monthly", and its checkout
 sends `interval: 'month'`, so the card and the charge agree (owner decision, 2026-11-08). A paid
 tier with neither price still reads "Not available at this interval". The iPhone app lists products rather than toggling, so its yearly row comes
-first. The day-10 and day-14 trial emails (ADR 0039 §7, amended) name the yearly price first and
+first. The day-10 and day-14 trial emails (ADR 0039 §7, amended) named the yearly price first and
 then the monthly, each once: "If you would like to keep Garden, it is $24.99 a year, or $2.99 a
-month." Both amounts are read from the catalog, and a catalog with no yearly Garden price on sale
-names the monthly alone.
+month." Both amounts were read from the catalog, and a catalog with no yearly Garden price on sale
+named the monthly alone. (Since 2026-11-19 the trial emails name no price at all; ADR 0039 §7.)
 
 Why: every paid rival read on 2026-11-08 (Planta, Greg, PictureThis, Blossom, Gardenia) leads with
 a yearly price between $29.99 and $79.99, and $24.99 is the lowest yearly price in that set. A

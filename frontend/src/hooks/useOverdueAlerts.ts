@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
+import i18n from '@/i18n';
 import { Task } from '@/services/plantService';
 import { isOverdue, overdueAt } from '@/utils/date';
+import { taskTypeName } from '@/utils/taskTypeConfig';
 import { isEnabledLocally, notify } from '@/utils/notifications';
 
 const STORAGE_KEY_PREFIX = 'fg.overdueAlerts.announced';
@@ -139,8 +141,10 @@ export function useOverdueAlerts(
         // Only a notification that was actually shown counts as announced.
         // Marking before the send meant a browser that rejected construction
         // (iOS standalone PWA) silently lost the alert for the whole session.
-        const shown = notify(`${task.plantName} could use a little care`, {
-          body: `${task.customType ?? task.type} is ready whenever you are.`,
+        const shown = notify(i18n.t('notifications.overdueAlertTitle', { plant: task.plantName }), {
+          body: i18n.t('notifications.overdueAlertBody', {
+            task: taskTypeName(i18n.t, task.customType ?? task.type),
+          }),
           tag: `task-${task.id}`,
         });
         if (!shown) continue;

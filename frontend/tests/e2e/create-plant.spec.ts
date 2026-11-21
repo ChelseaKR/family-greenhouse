@@ -132,7 +132,11 @@ test.describe('Create plant flow', () => {
     // `variant="info"` — the plant DID save, so the recovery notice is
     // announced politely (role="status") rather than interrupting whatever the
     // screen reader is mid-sentence on. See components/Alert.tsx.
-    await expect(page.getByRole('status')).toContainText('Plant saved; photo not uploaded');
+    // The page has other status regions too (the route announcer, and the
+    // photo upload's own), so pick the notice by what it says.
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Plant saved; photo not uploaded' })
+    ).toBeVisible();
     expect(createRequests).toBe(1);
     expect(putAttempts).toBe(1);
 

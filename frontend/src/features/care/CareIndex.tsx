@@ -2,9 +2,63 @@ import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { siteUrl } from '@/config/site';
+import { SITE_URL, siteUrl } from '@/config/site';
 import { CARE_GUIDE_INDEX } from './careGuideContent';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
+import { HolidayCareGuides } from './HolidayCareGuides';
+
+const PAGE_TITLE = 'Plant Care Guides — How Often to Water Common Houseplants';
+const PAGE_DESCRIPTION =
+  'Straight, no-nonsense care guides for common houseplants: how often to water, how much light, and why yours might be dying.';
+
+/**
+ * The same CollectionPage / ItemList / BreadcrumbList shape /pet-safe
+ * publishes (see PetSafePage.tsx for why CollectionPage). This hub was the one
+ * page linking every guide that told a crawler nothing about that list: no
+ * structured data at all, while each guide's own breadcrumb names it as
+ * "Plant care". Names and URLs come from CARE_GUIDE_INDEX, in the order the
+ * visible list renders, so the two cannot disagree. Nothing here is visible.
+ */
+const CARE_INDEX_JSON_LD = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'CollectionPage',
+      '@id': siteUrl('/care'),
+      url: siteUrl('/care'),
+      name: PAGE_TITLE,
+      description: PAGE_DESCRIPTION,
+      inLanguage: 'en',
+      isPartOf: {
+        '@type': 'WebSite',
+        '@id': `${SITE_URL}/#website`,
+        name: 'Family Greenhouse',
+        url: SITE_URL,
+      },
+      mainEntity: { '@id': siteUrl('/care#guides') },
+    },
+    {
+      '@type': 'ItemList',
+      '@id': siteUrl('/care#guides'),
+      name: 'Houseplant care guides',
+      numberOfItems: CARE_GUIDE_INDEX.length,
+      itemListElement: CARE_GUIDE_INDEX.map((guide, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        name: guide.commonName,
+        url: siteUrl(`/care/${guide.slug}`),
+      })),
+    },
+    {
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: siteUrl('/') },
+        // The name every guide's own breadcrumb already gives this page.
+        { '@type': 'ListItem', position: 2, name: 'Plant care' },
+      ],
+    },
+  ],
+};
 
 /**
  * Index of the species care guides. Doubles as the internal-linking hub that
@@ -12,21 +66,30 @@ import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
  * a single page that links them all. Public, no auth.
  */
 export function CareIndex() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  // The intro and the guide list are English by design (docs/i18n.md); the
+  // household section and the holiday list are translated and carry the
+  // page's own language back inside the English <main> (WCAG 3.1.2).
+  const pageLang = i18n.resolvedLanguage ?? i18n.language;
   useMetaTags({
-    title: 'Plant Care Guides — How Often to Water Common Houseplants',
-    description:
-      'Straight, no-nonsense care guides for common houseplants: how often to water, how much light, and why yours might be dying.',
+    title: PAGE_TITLE,
+    description: PAGE_DESCRIPTION,
     canonical: siteUrl('/care'),
+    jsonLd: CARE_INDEX_JSON_LD,
   });
 
   return (
-    <PublicShell>
+    <PublicShell contentLang="en">
       <PageIntro
         eyebrow="Before the plant comes home"
         title="Plant care guides"
         lede="How often to water it, how much light it wants, and why yours is doing that. Honest, specific, no “lush green companion” filler."
       />
+
+      {/* Holiday care guides; see holidayGuideList.ts. */}
+      <div lang={pageLang}>
+        <HolidayCareGuides id="care-index-holiday" />
+      </div>
 
       <ul className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2">
         {CARE_GUIDE_INDEX.map((g) => (
@@ -45,7 +108,7 @@ export function CareIndex() {
         ))}
       </ul>
 
-      <section aria-labelledby="care-index-household" className="mt-12">
+      <section lang={pageLang} aria-labelledby="care-index-household" className="mt-12">
         <h2 id="care-index-household" className="font-serif text-xl text-ink">
           {t('landing.care.householdHeading')}
         </h2>

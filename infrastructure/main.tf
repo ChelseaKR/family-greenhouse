@@ -66,7 +66,15 @@ locals {
     Environment = var.environment
     ManagedBy   = "terraform"
   }
+
+  # The permissions boundary for this environment's Lambda execution roles
+  # (ADR 0049), or "" for none. Named by ARN, not by reference to
+  # module.cicd, because that module exists only in the production state and
+  # staging uses the same policy. The name matches modules/cicd/main.tf.
+  permissions_boundary_arn = var.iam_permissions_boundary_enabled ? "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-permissions-boundary" : ""
 }
+
+data "aws_caller_identity" "current" {}
 
 provider "aws" {
   region = var.aws_region
@@ -110,10 +118,11 @@ module "email" {
   }
   count = var.domain_name == "" ? 0 : 1
 
-  environment     = var.environment
-  project_name    = var.project_name
-  domain_name     = var.domain_name
-  dmarc_rua_email = var.dmarc_rua_email
+  environment              = var.environment
+  project_name             = var.project_name
+  domain_name              = var.domain_name
+  dmarc_rua_email          = var.dmarc_rua_email
+  permissions_boundary_arn = local.permissions_boundary_arn
 }
 
 # Auth module (Cognito). When the email module is present, hand its identity
@@ -160,6 +169,7 @@ module "api" {
 
   environment                    = var.environment
   project_name                   = var.project_name
+  permissions_boundary_arn       = local.permissions_boundary_arn
   cognito_user_pool_id           = module.auth.user_pool_id
   cognito_client_id              = module.auth.client_id
   passkeys_enabled               = var.passkeys_enabled
@@ -262,6 +272,7 @@ module "api" {
   stripe_automatic_tax_enabled          = var.stripe_automatic_tax_enabled
   payments_enabled                      = var.payments_enabled
   app_store_billing_enabled             = var.app_store_billing_enabled
+  app_store_environments                = var.app_store_environments
 }
 
 # Price ids are visually identical in test and live Stripe mode, so this is
@@ -439,6 +450,13 @@ module "monitoring" {
   monthly_budget_usd              = var.monthly_budget_usd
   cognito_mau_alert_threshold     = var.cognito_mau_alert_threshold
   lambda_dlq_name                 = module.api.lambda_dlq_name
+
+  # Every handler's log group, for the email-failure metric filters. Email is
+  # sent from inside many handlers (reminders, digests, households, tasks,
+  # billing, notifications ...), so the filters fan out over all of them
+  # rather than a hand-kept list that a new sender would not be on.
+  lambda_log_group_names = module.api.lambda_log_group_names
+
   # Wired only when the email module is provisioned (domain set). No cycle:
   # monitoring already depends on api (which depends on email), and email
   # depends on nothing here.
@@ -481,9 +499,12 @@ module "monitoring" {
 # in-code rate limiting. To reintroduce real edge WAF, front the API with
 # CloudFront and attach a CLOUDFRONT-scoped ACL there.
 
-# GitHub OIDC + deploy role for CI/CD. Skipped (count=0) until github_org +
-# github_repo are set, so first-time `terraform apply` doesn't try to
-# provision an OIDC provider before the repo exists.
+# GitHub OIDC + the CI/CD roles and the permissions boundary (ADR 0049).
+# Skipped (count=0) until github_org + github_repo are set, so first-time
+# `terraform apply` doesn't try to provision an OIDC provider before the repo
+# exists. Production's state holds these; staging's tfvars leave the two
+# variables blank. Changes to this module are applied by an admin, not by CD:
+# see the module's header and docs/cicd-setup.md.
 module "cicd" {
   source = "./modules/cicd"
 
@@ -493,7 +514,9 @@ module "cicd" {
   }
   count = var.github_org == "" || var.github_repo == "" ? 0 : 1
 
-  project_name = var.project_name
-  github_org   = var.github_org
-  github_repo  = var.github_repo
+  project_name        = var.project_name
+  github_org          = var.github_org
+  github_repo         = var.github_repo
+  deploy_environments = var.cicd_deploy_environments
+  legacy_allowed_refs = var.cicd_legacy_allowed_refs
 }

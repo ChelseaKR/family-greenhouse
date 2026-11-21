@@ -317,12 +317,12 @@ function serverErrorMessage(error: unknown): string {
         return data;
       }
     }
-    return error.message || 'An unexpected error occurred';
+    return error.message || i18n.t('common.unexpectedError');
   }
   if (error instanceof Error) {
     return error.message;
   }
-  return 'An unexpected error occurred';
+  return i18n.t('common.unexpectedError');
 }
 
 /** No response came back: offline, unreachable, or timed out (not cancelled). */

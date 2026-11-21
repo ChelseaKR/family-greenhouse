@@ -18,6 +18,423 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **A way to give an outage household its 14 days.**
+  `npm run trial:restart-outage -- <householdId>` restarts the no-card Garden
+  trial for 14 days from now, for one household whose trial ended during the
+  email outage and whose admin replied to the note asking for it. It is a dry
+  run unless `--confirm` is passed, and prints dates and counts only. It refuses
+  a household on any paid plan, App Store purchase, lifetime purchase or
+  running gift, one whose trial is still running or ended outside the outage,
+  and one already restarted. The write is cancelled if the household changed
+  after it was read. The existing day-10 and day-14 trial emails then follow
+  the new dates. Operator-run only, once per household (ADR 0027, amended
+  2026-11-19). See `docs/runbooks.md`.
+
+- **An Accessibility Conformance Report.** `docs/a11y/ACR.md` reports every
+  WCAG 2.2 Level A and AA criterion for the web site, the signed-in app, the
+  token pages and the HTML emails, based on the VPAT® 2.5 Rev WCAG edition
+  (VPAT is a registered service mark of ITI). It is a draft from automated and
+  synthetic evidence: rows that depend on what a screen reader says are marked
+  as qualified, and its Appendix B is the human walkthrough that issues it.
+  The iOS app's native frame is reported separately, as not yet run on a
+  device. Linked from `docs/accessibility.md` and the README.
+
+### Changed
+
+- **Five more pet pages answer the animal people search for first.** The
+  pothos, peace lily and bird of paradise pages lead with the dog question
+  and the anthurium and money tree pages with the cat question, the same way
+  the Christmas cactus page leads with cats: the cited ASPCA answer comes
+  ahead of the hotline box, and the title becomes, for example, "Is peace
+  lily toxic to dogs? Listed as toxic". Each animal was picked from US Search
+  Console queries (2026-08-14 to 11-11). The fiddle-leaf fig page cannot lead
+  yet because its ASPCA listing is for the Ficus genus, so it keeps its
+  title. No verdict, note or source changed. The prayer plant care guide's
+  title names Maranta ("How Often to Water a Prayer Plant (Maranta): Evenly
+  Moist"), the name people search it by.
+
+### Fixed
+
+- **A selected chip or view toggle no longer depends on a pale tint.** The
+  selected filter chip or view toggle (Tasks, the phone checklist, Plants,
+  the dashboard activity chips, the space picker) is now filled dark green
+  with white text, 5.8:1 against the page, where it was a 1.1:1 tint (WCAG
+  1.4.1, 1.4.11). It matches the plant-name and billing-interval choices.
+
+- **Spanish for the last English the app wrote on Spanish screens** (WCAG
+  3.1.2): the care report's times ("hace 3 días"), the Skip cycle snooze
+  option ("Saltar esta vez"), the climate card when weather is off, the
+  overdue notification ("Regar: cuando puedas."), the phone push timeout, the
+  pet-safe tab title and share text, and the sitter page's Done button name.
+  Task types show by name rather than as the stored value ("Regar — Monstera",
+  "completó el riego"; in English "Water", "completed watering"). Plan names
+  stay English as proper names. No native-speaker review yet.
+
+- **Refreshing in the iPhone app without the pull gesture.** Tapping the tab
+  you are on, when its first screen is already at the top, refreshes it the
+  same way pull to refresh does (WCAG 2.5.7). Not yet tried on a device.
+
+- **Accessibility gaps found while writing the report.** Email titles and
+  section labels are real headings. The command palette's result lists are
+  named groups. A toast waits while the pointer is on it or focus is in it, so
+  its Undo button cannot vanish while in use. The chat message box, help
+  search and two selects that set their own border reach 3:1, like the other
+  fields. Each notification switch is described by the sentence beside it, and
+  its blocks are named groups. The 30-day chart gives a screen reader each
+  day's count. The care guides mark their English content as English for a
+  Spanish visitor. The kiosk's "Due today" line reaches 4.5:1. The brand
+  wordmark drops an `aria-label` that ARIA does not allow on a plain `span`.
+  The populated plant tag and kiosk pages are now in the axe suite. No wording
+  changed; existing sentences are now announced in a few new places.
+
+## [0.53.2] - 2026-11-20
+
+**The trial emails tell the truth about a household's plants and are plain
+account notices, an alarm now pages when app email stops going out, and a
+one-time operator script can send the note about the September to November
+email outage.** No stored data, Terms or Privacy text changed. The alarm is new
+Terraform (metric filters and one CloudWatch alarm) applied by the normal
+deploy.
+
+### Added
+
+- **An alarm when email stops going out.** From v0.24.0 to v0.53.1 nearly
+  every app email failed and nothing alerted: each failure was caught, logged
+  as a warning, and the run carried on. CloudWatch now counts those failure
+  lines on every backend function's log group, covering emails Amazon SES
+  refused or that failed before the send, and household emails that could not
+  be queued. The alerts topic is paged when five or more land in 24 hours. One
+  failed send does not page. Tests check that every counted message is still
+  logged by the code, and that any new email-failure message is either counted
+  or excluded with a reason.
+
+- **A one-time note about the missed emails.** `npm run notify:email-outage`
+  sends the approved service note about the 2026-09-04 to 2026-11-19 email
+  outage to every member of an active household with email on, before the
+  2026-11-23 weekly digest. Admins of a household whose no-card trial ended in
+  that window, and which is not on a paid plan, also get an offer of another
+  14 days of Garden if they reply. It is a dry run unless `--confirm` is
+  passed, keeps one marker per person so a re-run never mails anyone twice,
+  skips anyone with email turned off and any suppressed address, leaves out
+  leftover test households, and refuses to run after the digest unless
+  `--late` is passed. Operator-run only; nothing runs it on a schedule. See
+  `docs/runbooks.md`.
+
+### Fixed
+
+- **The trial emails no longer tell a household with plants that it has none.**
+  The day-10 and day-14 emails count plants added during the trial. A household
+  that already had plants when its trial began, and added none during it, was
+  told "You have not added a plant yet." It is now told how many active plants it
+  has. With no care task done, the email says none was marked done "during the
+  trial" rather than "yet". English and Spanish.
+
+### Changed
+
+- **The trial emails are account notices, not offers.** The day-10 and day-14
+  emails no longer name the Garden prices or a first-charge date, and no longer
+  have the "See plans in Settings" button. They say when the trial ends, that
+  nothing is charged, what changes and that nothing is deleted. The one-click
+  unsubscribe and the trial-notices setting are unchanged (ADR 0039 §6 and §7
+  amended).
+
+## [0.53.1] - 2026-11-19
+
+**Emails send again.** Care reminders, weekly digests, the welcome email, the
+trial emails and the household emails had not been sent since v0.24.0, and the
+members list could not show which addresses bounce. No user data, Terms or
+Privacy text changed. The IAM change applies with the normal deploy.
+
+### Fixed
+
+- **HTML emails send again.** Every email with an HTML part (care reminders,
+  weekly digests, the welcome email and the trial emails on days 10 and 14)
+  had been refused by Amazon SES with "Duplicate header 'Content-Type'" since
+  v0.24.0. The message builder left out the empty line that ends the header
+  block, so the text part's own `Content-Type` was read as a second top-level
+  header. Text-only emails (invites, billing notices) were not affected. Tests
+  now parse each built message into its header blocks and require exactly one
+  `Content-Type` in each.
+- **Household emails are queued again.** The queue write for household emails
+  (a task is up for grabs, someone covered your task, someone joined or left)
+  named the attribute `items` without an alias. `items` is a DynamoDB reserved
+  word, so every write was rejected and none of these emails was ever queued.
+  Every attribute in those writes is now aliased, and tests check each write
+  against DynamoDB's own expression rules.
+- **The household members list can tell which addresses bounced.** The
+  Lambda role lacked `dynamodb:BatchGetItem`, so the email-suppression lookup
+  behind the members list was denied on every call and every member's email
+  showed as unknown. The role now has that one action on the app table only
+  (not its indexes); the IAM invariants test pins it.
+
+## [0.53.0] - 2026-11-18
+
+**Production grants App Store plans for Production transactions only, a plant
+photo upload is bound to one file, household invites admit a limited number of
+people, an email change waits for verification, and the deploy pipeline runs
+under three narrower AWS roles. The iPhone app gets a "See plans" button, the
+Garden card names the Away Kit, and more of the app is in Spanish.** The Terms
+and Privacy text did not change. This release needs the one-time admin step in
+`docs/cicd-setup.md` ("Moving an existing account to environment-only trust")
+done before its tag.
+
+### Security
+
+- **Production grants a plan only for Production App Store transactions**
+  (ADR 0045). The backend default for `APP_STORE_ENVIRONMENTS` is now
+  `Production`; it was `Production,Sandbox`. Terraform gains
+  `app_store_environments` (default `"Production"`, or `"Production,Sandbox"`),
+  which the billing Lambda reads. Production sets `"Production"` and staging
+  sets `"Production,Sandbox"`, each in its own tfvars. A Sandbox transaction
+  sent to production is verified, logged and ignored. **What the deploy
+  changes:** one environment variable on the billing Lambda in each
+  environment; no stored data is migrated, and a subscription already
+  recorded keeps its plan until its recorded expiry. **Before an App Store
+  submission,** production must be set to `"Production,Sandbox"` and deployed,
+  or the TestFlight purchase check and App Review's purchase will not finish;
+  it is set back in the first release after approval
+  (`docs/mobile-release-checklist.md`).
+- **A plant photo upload is bound to one file, and the photo is stored apart
+  from the upload** (ADR 0046). `POST /plants/{id}/image` and the caretaker
+  photo route now take `contentLength`, the file's exact size in bytes, and
+  refuse a request without it or above 5 MiB. The upload URL is signed for
+  that size and that content type, to a holding key under `uploads/`. The
+  confirm step checks the uploaded bytes, removes their metadata and stores
+  the result under a new `plants/` key of its own; the confirm response
+  returns that photo. The images bucket deletes anything left under
+  `uploads/` after one day. **Clients:** a browser tab or installed web app
+  still running the previous code gets a 400 that says to reload or update
+  when it adds a photo; a reload fixes it. The iPhone and Android apps get
+  the new code with their next store build, and no store build exists yet.
+- **A household invite admits a limited number of people and can be turned
+  off** (ADR 0047). An invite link admits up to 5 people and an emailed
+  invitation one, each for 7 days. Every invite a household has made stops
+  working when a member leaves or is removed. An admin can also turn them
+  off with "Turn off invite links" on the Household page
+  (`DELETE /households/{id}/invites`). An invite that was pending before
+  this release keeps working, as a link with 5 uses.
+- **A changed email address takes effect only after it is verified**
+  (ADR 0048). The user pool now holds an email change until the code sent to
+  the new address is entered, the ID token says whether the address is
+  verified, and turning email back on after a bounce or complaint is refused
+  for an address that is not. `docs/security.md` described the first of
+  these before it was configured; it now says what is configured, and a
+  test reads both.
+- **What the deploy changes.** Terraform updates the user pool and its app
+  client in place (read the plan: neither may be replaced), adds two
+  lifecycle rules to the images bucket and adds one API route. No stored
+  data is migrated: existing photos keep their keys, and existing invites
+  gain their counters on first use. The post-deploy smoke test now uploads
+  to the holding prefix and expects storage to refuse an upload of a
+  different size.
+- **AWS trusts GitHub environments, and the deploy pipeline cannot widen
+  itself** (ADR 0049). Three changes to the pipeline, none to the app:
+  - **Roles and trust.** The one CI/CD role becomes three: a deploy role for
+    `terraform apply`, a release role with no IAM writes for everything after
+    it, and a read-only role for the alert relay. Each can be assumed only
+    from named GitHub environments; no role trusts a branch or a tag. A
+    release still pauses for one approval.
+  - **IAM.** The deploy role is denied every change to the CI/CD roles, their
+    policies and the OIDC provider, must put a permissions boundary on any
+    role it creates, and cannot remove one. The boundary goes on the staging
+    Lambda roles now and on the production ones when
+    `iam_permissions_boundary_enabled` is set to `true`.
+  - **Installs.** Jobs that hold an OIDC token or a secret install with
+    `npm ci --ignore-scripts`.
+- **The pipeline change is applied by an admin, not by a release.** An admin
+  applies `infrastructure/modules/cicd` from a
+  terminal, adds two repository secrets (`AWS_RELEASE_ROLE_ARN`,
+  `AWS_ALERT_RELAY_ROLE_ARN`) and creates the `staging-infrastructure`
+  environment with a required reviewer, in the order
+  `docs/cicd-setup.md` gives ("Moving an existing account to environment-only
+  trust"). A release cut before that stops at its first job or at the plan
+  check, with nothing applied. A staging deploy now asks for one approval.
+
+### Changed
+
+- **In the iPhone app, an admin gets a "See plans" button where the trial
+  ends and in the Going-away offer.** With Apple In-App Purchase on, the
+  dashboard's trial notice shows "See plans" (Spanish "Ver planes"), to
+  Settings → Plan status, in its last days and for a week after it ends, in
+  place of the "View plan status" link; members keep the link. Not in the
+  first days of the trial: Apple charges when the person confirms and the free
+  days stop at once. The Going-away offer keeps its sentence ("Plans are in
+  Settings → Plan status, where a household admin can subscribe.") and adds
+  the same button for an admin. No price is shown, and the website, Android
+  and an iPhone build without In-App Purchase do not change.
+- **The Garden card names the Away Kit.** On `/pricing` and in Plan status the
+  Garden card now lists, right after "Unlimited household members", "Sitter
+  links of up to 90 days, with up to 10 live at once" (the Going-away offer's
+  sentence, with the catalog's figures) and "A printable care brief and photos
+  back from your sitter", in English and Spanish. The free card's "1 sitter
+  link at a time, up to 7 days" no longer reads, through "Everything in
+  Seedling", as Garden's limit too. A figure the catalog does not send leaves
+  its line out.
+- **The home page's "A growing collection" card says where the free plan
+  ends:** "The free plan holds 8 plants; Garden holds 200." (Spanish "El plan
+  gratuito admite 8 plantas; Garden, 200."). `scripts/check-plan-copy.mjs` now
+  derives both figures from `backend/src/models/plans.ts` for this sentence, in
+  both languages.
+- **An App Store purchase is counted like a Stripe one.** The first time the
+  backend binds a Production App Store subscription to a household, it sends
+  the first-party product event `subscription_activated` with `plan`,
+  `interval` and `store: 'app_store'`, and the log line names `app_store` as
+  its source. Before this, a purchase in the iPhone app sent no product event
+  at all. Renewals, restores, Apple's notifications and Sandbox purchases send
+  nothing. Nothing a customer sees changes. `docs/analytics.md` says how to
+  count it.
+- **The day-10 trial email asks a household with no plant to add one first.**
+  When the household's plant count reads as 0, the email leads with "You have
+  not added a plant yet. Add your first plant and say how often it needs
+  water, and Family Greenhouse can remind you when it is due." and a button,
+  "Add your first plant", to `/plants/new`, in English and Spanish. The plans
+  line and "See plans in Settings" follow it. The facts section is left out in
+  that case, since there is nothing to count. A count that could not be read,
+  or a household that has plants now, gets the email as before. Households
+  with plants and the day-14 email are unchanged.
+- **Every care guide ends with the "Holiday plants" list.** It is the list
+  the home page and `/care` already show, with the same heading and the same
+  link words: Amaryllis, Paperwhite, Poinsettia, Christmas Cactus, Cyclamen
+  and Rosemary. It is the last thing on the page, below the related plants,
+  and a holiday guide leaves itself out. Search Console shows the guides that
+  reach the first page of US results are holiday and less-common ones. Three
+  of them are on this list (amaryllis, cyclamen, paperwhite), and November to
+  January is when they are searched, so each guide on the list now has a link
+  from every other guide and not only from the home page and `/care`.
+  `HOLIDAY_CARE_GUIDES_ON` in `holidayGuideList.ts` still switches the list
+  off everywhere.
+- **The poinsettia guide's search title and description lead with the
+  watering answer.** The title is now "How Often to Water a Poinsettia: When
+  the Surface Is Dry" (it was "Poinsettia Care and Pet Safety: Past the
+  Holidays"), and the description opens with the same answer. Both restate
+  the guide's own cited watering answer; no fact changes, and the page's
+  heading and pet section are as they were. The other holiday guides that
+  lead this way are the ones that reach the first page of US results, and the
+  poinsettia guide had no US search impressions in the 28 days to 2026-11-16.
+- **The Christmas cactus guide's search title leads with the watering
+  question.** It is now "How Often to Water a Christmas Cactus: Top Inch Dry"
+  (it was "How to Care for a Christmas Cactus: When to Water It"), from the
+  guide's own cited water line. The description, which already opens with
+  that answer, and the heading are unchanged.
+- **Six care guides answer "how often should I water it in winter?"** The
+  snake plant, jade plant, ponytail palm, hoya, haworthia and Boston fern
+  guides each gain that question, second in their FAQ and in the FAQ markup.
+  Each answer restates what the guide's watering section already says, with
+  the same named source; no fact is new. The short answer under "How often
+  to water" is still the year-round one. 23 guides give a winter instruction
+  in their water line, and only one asked the winter question.
+- **A blog post that has changed shows when.** The line above a post's
+  title reads, for example, "July 29, 2026 · Updated November 17, 2026 · 6 min
+  read". The second date is the post's `updated` date, the one its markup and
+  the sitemap already publish, so a reader sees the date a crawler does. A
+  post that has not changed since it was published shows its publish date
+  alone. Blog posts are English only, so the word is not in the catalogs.
+- **The App Store keyword field gains `water`.** It is now 97 of 100
+  characters. "Watering" is in the subtitle, and the bare word was in none of
+  the three fields Apple indexes. It is for the iPhone submission already
+  planned; nothing else in the listing changes
+  (`store-assets/metadata/en-US.json`, `docs/APP-STORE.md`).
+
+### Fixed
+
+- **The post-deploy smoke test reads the stored photo from the signed URL the
+  confirm response returns.** The check added with ADR 0046 expected the
+  stored reference there. A deployed API answers with a short-lived signed S3
+  URL for every photo (ADR 0033), so the first staging run failed at that
+  check with the upload itself working. The test now reads the bucket and key
+  out of the signed URL, and a real-handler test pins that shape. It also
+  treats any client-error status as storage refusing an upload of a different
+  size, where it had required exactly 403. No app code changed.
+- **A blog post's modified date is the date it last changed.** Each post
+  told search engines it was last modified the day it was published: the
+  sitemap `<lastmod>` and the Article `dateModified` were both the publish
+  date, and there was no `article:modified_time`. All 14 posts had been edited
+  since. The overwatering post said 2026-07-29 after two retitles and after
+  two other posts were merged into it (live 2026-11-17). The post manifest
+  gains an `updated` field, set for each post to the day its newest change was
+  released, and the sitemap, the
+  Article markup and `article:modified_time` read it. `/blog` in the sitemap
+  takes the newest of them. A new check in `npm run test:edge` fails when a
+  post's text, title or descriptions change and its `updated` does not
+  (`frontend/scripts/blog-posts-lastmod.json`, written by
+  `npm run blog:lastmod --workspace frontend`). The publish date a reader
+  sees on a post is unchanged.
+- **A task due every day reads "Every day" on the plant page.** It read
+  "Every 1 days", and in Spanish "Cada 1 día": the singular form held the
+  plural sentence. It now reads "Every day" and "Cada día". Every other
+  interval is unchanged ("Every 2 days", "Cada 2 días").
+- **The dashboard's empty activity filters read as sentences.** When a
+  filter matched none of the last 50 events, the English dropped the filter's
+  name into "No ___ activity": "No tasks activity", "No plants activity", "No
+  people activity" and "No all activity". They now read "No task activity…",
+  "No plant activity…", "No activity about people…" and "No activity…". The
+  Spanish was already right and is unchanged.
+- **The line under the chat's message box says plainly when a reminder is
+  created.** "Reminder suggestions wait for your confirm before being created"
+  is now "Suggested reminders are created only after you confirm them.", and
+  in Spanish "Los recordatorios sugeridos solo se crean cuando los
+  confirmas." It uses the words on the suggestion card itself. The line's
+  first two sentences are unchanged.
+- **More of the app is in Spanish for a Spanish-language user.** About a
+  hundred strings that the hardcoded-string check cannot see (they sat in
+  props, toasts, form errors, helper functions and lists of labels) now come
+  from the catalog: on the plant page (toasts, snooze lengths, care report,
+  streaks, photo descriptions), Add plant, the dashboard, Year in review,
+  Analytics, Household, Settings (account, API keys, notifications), the
+  sitter page, /status, the wall display and /gift. The three Spanish plural
+  forms for counts of a million copy the ordinary plural, so no catalog value
+  is left as pending English. The curated care tips stay English and are now
+  marked `lang="en"` for screen readers. On the sitter page, a task with no
+  plant name reads "Riega tu planta" (and "Abona", "Poda", "Trasplanta tu
+  planta") instead of a named sentence with a stand-in; tasks with a name are
+  unchanged ("Riega la Monstera"). Twelve strings stay
+  English until Chelsea has seen them on screen. English text is unchanged
+  except two fixes that come with the catalog, both approved: "Passwords do
+  not match." now reads "Passwords don't match" (the reset-password wording),
+  and Year in review says "1 task", not "1 tasks". Spanish approved by
+  Chelsea on 2026-11-18; no native speaker has reviewed it.
+- **Accessibility fixes from the 2026-11-17 sweep.** Buttons that show a busy
+  state keep keyboard focus, new chat messages and page changes are announced
+  to screen readers, and a few labels and focus orders are corrected.
+
+- **A sitter task with no plant name reads "Water your plant".** The English
+  read "Water the this plant" (and "Feed", "Prune", "Repot the this plant",
+  and "Misting — this plant" for a custom task). It now reads "Water your
+  plant", "Feed your plant", "Prune your plant", "Repot your plant" and
+  "Misting — your plant". Tasks with a name ("Water the Monstera") and the
+  Spanish are unchanged. Wording approved by Chelsea on 2026-11-18.
+
+## [0.52.0] - 2026-11-17
+
+**The release the next iPhone store build is cut from, and that build is for
+iPhone only: the apps ask before sending anything to Amazon Bedrock or
+Plant.id, the App Store plans card says what each plan includes, and the help,
+plan notes and legal pages say what the iPhone app sells.** The Privacy Policy
+and the account-deletion page take effect November 17, 2026. The Terms did not
+change.
+
+- **The iOS app targets iPhone only** (`TARGETED_DEVICE_FAMILY = 1`, was
+  `1,2`), for its first App Store review (ADR 0043). On an iPad it runs as an
+  iPhone app. `npm run mobile:validate` now fails if the iPad target comes
+  back without a new decision. The website and the Android app are unchanged.
+- **The iPhone app no longer spends identification packs bought on the
+  website** (ADR 0044). Photo identification in the iPhone app uses only the
+  plan's monthly allowance; when that is spent it says identification isn't
+  included, as before, and offers no pack. Packs keep working on the website.
+  The request carries `useTopUpCredits: false`; the website and the Android
+  app send nothing new.
+- **What the deploy changes.** Terraform adds one AWS Budgets usage budget,
+  `family-greenhouse-cognito-mau-production`, which emails
+  support@familygreenhouse.net above 15 Cognito monthly active users. The pool
+  read 25 in October, so expect it to fire, and raise
+  `cognito_mau_alert_threshold` once the number has been read. The CloudFront
+  router function changes, to answer the two merged yellow-leaves posts with a 301. The production tfvars change only comments. `stripe_automatic_tax_enabled`
+  stays blank, so the new tax-code refusal does nothing yet. No stored data is
+  migrated. The apps get these changes only with a store build. iPhone 0.52.0
+  (build 5200) is that build, uploaded on the day it is submitted.
+
+### Added
+
 - **The apps ask before sending data to Amazon Bedrock or Plant.id.** In the
   iPhone and Android apps, the first chat question, leaf health check and photo
   identification each open a dialog that names the service and what goes to it.
@@ -70,6 +487,37 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **The three yellow-leaves posts are one page, and the guides Google had not
+  crawled get links from the pages it does.**
+  /blog/why-are-my-plant-leaves-turning-yellow and
+  /blog/do-yellow-leaves-mean-overwatering now answer a 301 to
+  /blog/signs-of-overwatering-and-how-to-fix-it, which had the most search
+  impressions of the three. The redirects live in `src/config/redirects.json`
+  and are served by the CloudFront router; the two posts left the sitemap.
+  The home page links the haworthia and rosemary guides, the monstera and aloe
+  vera guides list sago palm and blue echeveria among their related plants,
+  and the overwatering post's plant list adds haworthia, blue echeveria, sago
+  palm and rosemary. The home page and /care gain a "Holiday plants" list
+  (amaryllis, paperwhite, poinsettia, Christmas cactus, cyclamen, rosemary),
+  with Spanish names on the Spanish page. The overwatering post takes in what
+  only the merged posts said: Illinois Extension's root colours, with its
+  citation, and the six "If it is not the water" yellowing patterns.
+
+- **Every upgrade prompt opens Plan status at the plan choice.** "Change plan",
+  "Keep Garden", "Choose a Garden plan" and "See plans" now link to
+  `/settings/billing#change-plan`, and the page scrolls there. The Change plan
+  card moved up to sit right under Plan status, above the identification pack
+  and gifts, so a household that opens the page from either trial email also
+  finds it near the top. The Plan status heading and its one-line description
+  are translated. No price, plan or checkout rule changed.
+- **The cap and Going-away prompts name Garden's yearly price beside the
+  monthly one.** "Included with Garden — $24.99 a year or $2.99 a month for the
+  whole household", and "Garden is $24.99 a year or $2.99 a month for the whole
+  household. It adds:", with the button "Choose a Garden plan". The plan grid
+  those prompts open has led with the Yearly tab since ADR 0042, so a prompt
+  that named only "$2.99 a month" opened onto "$24.99 a year". A tier with no
+  yearly price (Greenhouse) keeps its monthly sentence. The no-card trial
+  notices are unchanged.
 - **The Christmas cactus pet page answers the cat question first, and the
   spider plant page answers rats.** /pet-safe/christmas-cactus now opens with
   "Is Christmas cactus toxic to cats?" and its cited ASPCA answer, ahead of
@@ -78,17 +526,12 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   rats?": the ASPCA listing has no rat entry, so the page says it can't say
   and points to an exotic-animal vet. Both are per-page fields in the pet
   table; no other page and no verdict changed.
-- **Five more pet pages answer the animal people search for first.** The
-  pothos, peace lily and bird of paradise pages lead with the dog question
-  and the anthurium and money tree pages with the cat question, the same way
-  the Christmas cactus page leads with cats: the cited ASPCA answer comes
-  ahead of the hotline box, and the title becomes, for example, "Is peace
-  lily toxic to dogs? Listed as toxic". Each animal was picked from US Search
-  Console queries (2026-08-14 to 11-11). The fiddle-leaf fig page cannot lead
-  yet because its ASPCA listing is for the Ficus genus, so it keeps its
-  title. No verdict, note or source changed. The prayer plant care guide's
-  title names Maranta ("How Often to Water a Prayer Plant (Maranta): Evenly
-  Moist"), the name people search it by.
+- **Two holiday care guides ask "how often to water it" in their heading.**
+  The amaryllis and cyclamen pages now have that H1 and
+  Article headline, where real US searches for the question already reach
+  positions 4 to 10. The amaryllis search description now gives the watering
+  rhythm its cited extension pages give: little until a new bulb sprouts, and
+  about once or twice a week in bloom. Titles and plant facts are unchanged.
 
 ### Fixed
 

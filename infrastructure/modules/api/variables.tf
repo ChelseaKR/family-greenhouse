@@ -8,6 +8,14 @@ variable "project_name" {
   type        = string
 }
 
+# ADR 0049. The most this module's roles can ever be allowed, however their
+# own policies are written. "" attaches none.
+variable "permissions_boundary_arn" {
+  description = "ARN of the permissions boundary to attach to every IAM role this module creates, or \"\" for none."
+  type        = string
+  default     = ""
+}
+
 variable "cognito_user_pool_id" {
   description = "Cognito User Pool ID"
   type        = string
@@ -192,6 +200,13 @@ variable "app_store_billing_enabled" {
   description = "Set to the exact string \"1\" to open the /billing/app-store/* routes (App Store purchase intent, signed transactions, App Store Server Notifications v2). Any other value answers 404. Subscriptions already recorded keep their entitlement either way."
   type        = string
   default     = "0"
+}
+
+# Production only unless an environment opts in to Sandbox (ADR 0045).
+variable "app_store_environments" {
+  description = "Value of APP_STORE_ENVIRONMENTS on the billing Lambda: \"Production\" or \"Production,Sandbox\"."
+  type        = string
+  default     = "Production"
 }
 
 # --- Notification delivery ---

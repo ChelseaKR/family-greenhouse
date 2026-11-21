@@ -127,7 +127,8 @@ data "aws_region" "current" {}
 resource "aws_iam_role" "lambda" {
   provider = aws.iam
 
-  name = "${var.project_name}-lambda-${var.environment}"
+  name                 = "${var.project_name}-lambda-${var.environment}"
+  permissions_boundary = var.permissions_boundary_arn == "" ? null : var.permissions_boundary_arn
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -175,6 +176,17 @@ resource "aws_iam_role_policy" "lambda" {
           var.dynamodb_table_arn,
           "${var.dynamodb_table_arn}/index/*"
         ]
+      },
+      {
+        # The household members list reads every member's email-suppression
+        # row in one call (services/emailSuppression.getDeliveryStates, run by
+        # the households Lambda). Without this action that read was denied on
+        # every call, so every roster showed "delivery unknown". Its own
+        # statement, on the table alone: BatchGetItem cannot read an index, and
+        # it reads nothing GetItem above cannot already read row by row.
+        Effect   = "Allow"
+        Action   = ["dynamodb:BatchGetItem"]
+        Resource = var.dynamodb_table_arn
       },
       {
         Effect = "Allow"
@@ -540,6 +552,7 @@ locals {
     STRIPE_AUTOMATIC_TAX_ENABLED          = var.stripe_automatic_tax_enabled
     PAYMENTS_ENABLED                      = var.payments_enabled
     APP_STORE_BILLING_ENABLED             = var.app_store_billing_enabled
+    APP_STORE_ENVIRONMENTS                = var.app_store_environments
     POSTHOG_KEY                           = var.posthog_key
     POSTHOG_HOST                          = var.posthog_host
   }
@@ -850,7 +863,8 @@ resource "aws_lambda_permission" "api_gateway" {
 resource "aws_iam_role" "chat_stream" {
   provider = aws.iam
 
-  name = "${var.project_name}-chat-stream-${var.environment}"
+  name                 = "${var.project_name}-chat-stream-${var.environment}"
+  permissions_boundary = var.permissions_boundary_arn == "" ? null : var.permissions_boundary_arn
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1213,6 +1227,7 @@ locals {
     "GET /households/{id}"                                = { group = "households", auth = "jwt" }
     "POST /households/{id}/invites"                       = { group = "households", auth = "jwt" }
     "POST /households/{id}/invites/email"                 = { group = "households", auth = "jwt" }
+    "DELETE /households/{id}/invites"                     = { group = "households", auth = "jwt" }
     "GET /households/invites/{inviteCode}"                = { group = "households", auth = "none" }
     "POST /households/join/{inviteCode}"                  = { group = "households", auth = "jwt" }
     "GET /households/{id}/activity"                       = { group = "households", auth = "jwt" }

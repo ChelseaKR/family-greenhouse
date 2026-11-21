@@ -25,6 +25,7 @@ import { SitterGapPrompt } from './SitterGapPrompt';
 import { GoingAwayOffer, type GoingAwayReason } from './GoingAwayOffer';
 import { SITTER_LINK_MAX_DAYS_CEILING, sitterLinkLimitsFor } from './sitterPlanLimits';
 import { toStartOfDayIso, todayLocalDateValue } from './localDates';
+import { CHANGE_PLAN_ROUTE } from '@/features/billing/changePlanLink';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -185,8 +186,8 @@ export function SitterLinksCard({
   return (
     <Card>
       <CardHeader
-        title="Plant-sitter links"
-        description="Going away? Share a temporary link so a neighbour or friend can see due care, plant names, current spaces, and placement notes — never your saved city, private notes, or member details. The link expires on its own, and you can revoke it any time."
+        title={t('household.sitterLinks.cardTitle')}
+        description={t('household.sitterLinks.cardDescription')}
       />
 
       {!created && awayReason === 'entry' && (
@@ -197,9 +198,8 @@ export function SitterLinksCard({
 
       {created ? (
         <div className="space-y-3">
-          <Alert variant="success" title="Your sitter link is ready">
-            Copy it now — for security, we won’t show the full link again. You can always create a
-            new one.
+          <Alert variant="success" title={t('household.sitterLinks.readyTitle')}>
+            {t('household.sitterLinks.readyBody')}
           </Alert>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
@@ -256,7 +256,7 @@ export function SitterLinksCard({
               setCopyError(false);
             }}
           >
-            Done
+            {t('common.done')}
           </Button>
         </div>
       ) : (
@@ -291,7 +291,7 @@ export function SitterLinksCard({
             <Input
               className="sm:col-span-2"
               label={t('household.sitterLinks.labelLabel')}
-              placeholder="e.g. The Smiths’ plants"
+              placeholder={t('household.sitterLinks.labelPlaceholder')}
               value={label}
               maxLength={60}
               onChange={(e) => setLabel(e.target.value)}
@@ -323,7 +323,7 @@ export function SitterLinksCard({
             disabled={atActiveCap}
             leftIcon={<KeyIcon className="h-4 w-4" aria-hidden="true" />}
           >
-            Create sitter link
+            {t('household.sitterLinks.create')}
           </Button>
           {limits?.planId === 'seedling' && awayReason === null && (
             <p className="text-xs text-gray-600">
@@ -333,7 +333,7 @@ export function SitterLinksCard({
                 <>
                   {' '}
                   <Link
-                    to="/settings/billing"
+                    to={CHANGE_PLAN_ROUTE}
                     className="text-primary-700 underline hover:text-primary-800"
                   >
                     {t('household.sitterLinks.seePlans')}
@@ -420,9 +420,11 @@ export function SitterLinksCard({
                         isLoading={revokeMutation.isPending && revokeMutation.variables === link.id}
                         onClick={() => revokeMutation.mutate(link.id)}
                         leftIcon={<TrashIcon className="h-4 w-4 text-red-500" aria-hidden="true" />}
-                        aria-label={`Revoke sitter link ${link.label || ''}`.trim()}
+                        aria-label={t('household.sitterLinks.revokeAria', {
+                          label: link.label || '',
+                        }).trim()}
                       >
-                        Revoke
+                        {t('caretaker.seats.revoke')}
                       </Button>
                     ) : (
                       <span className="text-xs text-gray-600">

@@ -271,12 +271,12 @@ test('a no-account sitter completes real care and the owner sees the history', a
     ).toBeVisible();
     await expect(sitter.getByText(/Water the Holiday Fern/i)).toBeVisible();
     await expect(sitter.getByText(/Sunroom/)).toBeVisible();
-    await sitter.getByRole('button', { name: /mark "Water the Holiday Fern" as done/i }).click();
+    await sitter.getByRole('button', { name: /mark “Water the Holiday Fern” as done/i }).click();
     await expect(sitter.getByText(/all caught up/i)).toBeVisible();
   } finally {
     await sitterContext.close();
   }
 
   await page.goto(`/plants/${account.plantId}`);
-  await expect(page.getByText(/Plant sitter completed water/i)).toBeVisible();
+  await expect(page.getByText(/Plant sitter completed watering/i)).toBeVisible();
 });

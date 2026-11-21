@@ -10,7 +10,8 @@ import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { formatCurrency } from '@/i18n/format';
 import { isNativeApp } from '@/lib/platform';
 import { billingService, effectivePlanId } from '@/services/billingService';
-import { nativePlanNoteKey } from '@/services/appStoreAvailability';
+import { appStorePurchasesAvailable, nativePlanNoteKey } from '@/services/appStoreAvailability';
+import { CHANGE_PLAN_ROUTE } from '@/features/billing/changePlanLink';
 
 /**
  * Why the prompt is showing:
@@ -51,7 +52,8 @@ function isCount(value: unknown): value is number {
  * ## What it says
  *
  * Every figure is the catalog's: the free plan's longest link, Garden's
- * longest link and how many may be live at once, and Garden's monthly price.
+ * longest link and how many may be live at once, and Garden's yearly and
+ * monthly prices.
  * A sentence whose figure did not arrive is left out, not guessed. The
  * feature lines are the Away Kit as the help pages describe it: the printable
  * brief, photos from the sitter and the return recap.
@@ -66,7 +68,10 @@ function isCount(value: unknown): value is number {
  * checkout runs with its double-charge guards and trial terms. This prompt
  * does not start a Stripe session itself. A member gets the existing one-tap
  * "ask an admin" (`AskToUpgrade`). Inside the apps there is no price and no
- * purchase button (Guideline 3.1.1), the same rule `LockedFeature` follows.
+ * purchase button toward the website (Guideline 3.1.1), the same rule
+ * `LockedFeature` follows. In the iPhone app with Apple In-App Purchase on
+ * (ADR 0041), an admin also gets "See plans", to Settings → Plan status,
+ * where Apple's purchase sheet is; still no price.
  */
 export function GoingAwayOffer({ householdId, reason, onUseFreeLength }: GoingAwayOfferProps) {
   const { t } = useTranslation();
@@ -98,6 +103,12 @@ export function GoingAwayOffer({ householdId, reason, onUseFreeLength }: GoingAw
   const gardenActive = garden.limits?.sitterLinksActive;
   const monthly = garden.monthlyPrice;
   const price = !native && isCount(monthly) && monthly > 0 ? formatCurrency(monthly) : null;
+  // The yearly price is named first, beside the monthly one, because the plan
+  // grid this button opens lands on the Yearly tab (ADR 0042). A prompt that
+  // said only "$2.99 a month" opened onto "$24.99 a year". Only when the
+  // catalog sells yearly; otherwise the monthly sentence stands alone.
+  const yearly = garden.annualPrice;
+  const annualPrice = price && isCount(yearly) && yearly > 0 ? formatCurrency(yearly) : null;
   const paymentsOn = plansQuery.data?.paymentsAvailable === true;
   const trialEnded = subscription?.noCardTrial?.state === 'ended';
 
@@ -120,7 +131,9 @@ export function GoingAwayOffer({ householdId, reason, onUseFreeLength }: GoingAw
   const buyLabel = price
     ? trialEnded
       ? t('settings.billing.noCardTrial.getGardenBack', { price })
-      : t('household.goingAway.upgrade', { price })
+      : annualPrice
+        ? t('household.goingAway.choosePlan')
+        : t('household.goingAway.upgrade', { price })
     : null;
 
   return (
@@ -147,7 +160,9 @@ export function GoingAwayOffer({ householdId, reason, onUseFreeLength }: GoingAw
           <div>
             <p className="font-medium text-primary-900">
               {price
-                ? t('household.goingAway.gardenAddsPrice', { price })
+                ? annualPrice
+                  ? t('household.goingAway.gardenAddsPrices', { annualPrice, price })
+                  : t('household.goingAway.gardenAddsPrice', { price })
                 : t('household.goingAway.gardenAdds')}
             </p>
             <ul className="mt-1 list-disc space-y-1 pl-5">
@@ -159,12 +174,19 @@ export function GoingAwayOffer({ householdId, reason, onUseFreeLength }: GoingAw
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             {native ? (
-              <p className="text-gray-600">{t(nativePlanNoteKey())}</p>
+              <>
+                <p className="text-gray-600">{t(nativePlanNoteKey())}</p>
+                {isAdmin && appStorePurchasesAvailable() && (
+                  <Link to="/settings/billing" className={buttonStyles({})}>
+                    {t('appStore.lockedSeePlans')}
+                  </Link>
+                )}
+              </>
             ) : isAdmin ? (
               buyLabel &&
               paymentsOn && (
                 <Link
-                  to="/settings/billing"
+                  to={CHANGE_PLAN_ROUTE}
                   // The price makes this label long; on a phone it wraps
                   // rather than clipping (the shared style never wraps).
                   className={buttonStyles({ className: 'text-center whitespace-normal!' })}

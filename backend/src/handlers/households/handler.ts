@@ -381,7 +381,8 @@ export const emailInvite = createHandler(
       );
     }
 
-    const invite = await householdService.createInvite(householdId, user.userId);
+    // Addressed to one person, so it admits one (ADR 0047).
+    const invite = await householdService.createInvite(householdId, user.userId, 'email');
     const url = `${baseUrl}/join/${invite.code}`;
 
     const status = await inviteEmail.sendInviteEmail({
@@ -463,6 +464,12 @@ export const validateInvite = createHandler(
 
     const household = await householdService.getHousehold(invite.householdId);
 
+    // Turned off by the household since it was made (ADR 0047): the same
+    // answer as an expired or used-up invite.
+    if (household && householdService.inviteRevokedByHousehold(invite, household)) {
+      return successResponse({ valid: false });
+    }
+
     return successResponse({
       valid: true,
       household: household
@@ -474,6 +481,44 @@ export const validateInvite = createHandler(
     });
   }
 ).use(rateLimit({ perWindowMs: 60_000, max: 30 }));
+
+// DELETE /households/:id/invites
+//
+// Turn off every invite this household has made so far (ADR 0047). There is
+// no list to pick from: an invite's code is shown once, when it is made, and
+// is never stored anywhere it could be read back. Invites made after this
+// work as usual. The same thing happens on its own whenever a member leaves
+// or is removed.
+export const revokeInvites = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const householdId = event.pathParameters?.id;
+
+    if (!householdId) {
+      throw createHttpError(400, 'Household ID is required');
+    }
+    if (user.householdId !== householdId) {
+      throw createHttpError(403, 'Access denied');
+    }
+
+    const revokedAt = await householdService.revokeHouseholdInvites(householdId);
+    if (!revokedAt) {
+      throw createHttpError(404, 'Household not found');
+    }
+
+    audit('household.settings_changed', {
+      actorId: user.userId,
+      actorEmail: user.email,
+      householdId,
+      metadata: { setting: 'invites_revoked', revokedAt },
+    });
+
+    return successResponse({ revokedAt });
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(requireAdmin());
 
 // POST /households/join/:inviteCode
 export const joinHousehold = createHandler(
@@ -495,6 +540,11 @@ export const joinHousehold = createHandler(
 
     if (!household) {
       throw createHttpError(400, 'Household not found');
+    }
+    // Turned off by the household since it was made (ADR 0047). The join
+    // below re-checks this in its own transaction.
+    if (householdService.inviteRevokedByHousehold(invite, household)) {
+      throw createHttpError(400, 'Invalid or expired invite');
     }
 
     const sub = await billing.getHouseholdSubscription(invite.householdId);
@@ -544,7 +594,10 @@ export const joinHousehold = createHandler(
         user.userId,
         userName,
         user.email,
-        limitOf(plan, 'members')
+        limitOf(plan, 'members'),
+        'member',
+        // The same transaction takes one of the invite's uses (ADR 0047).
+        invite
       );
     } catch (err) {
       // A concurrent double-join (two tabs, double-tap) loses the race on
@@ -553,6 +606,10 @@ export const joinHousehold = createHandler(
       // overwriting the winner's row.
       if (err instanceof Error && err.name === 'ConditionalCheckFailedException') {
         throw createHttpError(400, 'You are already a member of this household');
+      }
+      // Used up, expired or turned off between the lookup and the write.
+      if (err instanceof Error && err.name === 'InviteUnavailableError') {
+        throw createHttpError(400, 'Invalid or expired invite');
       }
       // The memberCount increment lost against the plan cap.
       if (err instanceof Error && err.name === 'PlanLimitError') {
@@ -1531,6 +1588,7 @@ export const handler = createRouter({
   'GET /households/{id}': getHousehold,
   'POST /households/{id}/invites': createInvite,
   'POST /households/{id}/invites/email': emailInvite,
+  'DELETE /households/{id}/invites': revokeInvites,
   'GET /households/invites/{inviteCode}': validateInvite,
   'POST /households/join/{inviteCode}': joinHousehold,
   'GET /households/{id}/activity': getActivity,

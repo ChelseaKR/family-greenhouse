@@ -109,7 +109,6 @@ export function buildRawMessage(input: RawMessageInput): Buffer {
   // Order matters: least-capable part first. A client that understands both
   // shows the last one it can render, which is the HTML.
   const body = [
-    '',
     `--${boundary}`,
     'Content-Type: text/plain; charset=UTF-8',
     'Content-Transfer-Encoding: base64',
@@ -124,5 +123,11 @@ export function buildRawMessage(input: RawMessageInput): Buffer {
     '',
   ].join(CRLF);
 
-  return Buffer.from(`${headers.join(CRLF)}${body}`, 'utf8');
+  // The empty line is what ends the message's header block (RFC 5322 §2.1).
+  // Without it, the first delimiter and the text part's own headers were read
+  // as more top-level headers, so the message carried two `Content-Type`
+  // lines and SES refused every html email with "Duplicate header
+  // 'Content-Type'" from v0.24.0 to v0.53.0. The text-only branch above always
+  // had its empty line, which is why the text-only emails kept sending.
+  return Buffer.from(`${headers.join(CRLF)}${CRLF}${CRLF}${body}`, 'utf8');
 }

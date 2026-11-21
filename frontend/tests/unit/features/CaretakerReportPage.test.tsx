@@ -1,9 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { CaretakerReportPage } from '@/features/caretaker/CaretakerReportPage';
 import { server } from '../../msw/server';
+import { toEndOfDayIso, toStartOfDayIso } from '@/features/household/localDates';
 
 const API = 'http://localhost:4000';
 
@@ -130,5 +131,65 @@ describe('CaretakerReportPage', () => {
     expect(
       screen.getByText(/119 tasks, 0 photos and 0 notes are counted above/)
     ).toBeInTheDocument();
+  });
+
+  it('asks for the picked days in local time, not as UTC days', async () => {
+    // The server reads a bare YYYY-MM-DD as a UTC day. In this suite's zone
+    // (America/New_York) that window ended at 7pm on the "to" day and the
+    // heading named the day before "from". The page now sends the local
+    // day's own bounds, so the window and the heading are the days picked.
+    const asked: URLSearchParams[] = [];
+    server.use(
+      http.get(`${API}/households/hh-1/caretaker-report`, ({ request }) => {
+        const params = new URL(request.url).searchParams;
+        asked.push(params);
+        return HttpResponse.json({
+          ...emptyReport,
+          from: params.get('from'),
+          to: params.get('to'),
+        });
+      })
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CaretakerReportPage />
+      </QueryClientProvider>
+    );
+    await screen.findByText('No caretaker visits were recorded in this range.');
+
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-09-01' } });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-09-03' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Show this range' }));
+
+    await waitFor(() => expect(asked).toHaveLength(2));
+    expect(asked[1].get('from')).toBe(toStartOfDayIso('2026-09-01'));
+    expect(asked[1].get('to')).toBe(toEndOfDayIso('2026-09-03'));
+    expect(await screen.findByText(/Sep 1, 2026 to Sep 3, 2026/)).toBeInTheDocument();
+  });
+
+  it('leaves a cleared date to the server default instead of failing', async () => {
+    const asked: URLSearchParams[] = [];
+    server.use(
+      http.get(`${API}/households/hh-1/caretaker-report`, ({ request }) => {
+        asked.push(new URL(request.url).searchParams);
+        return HttpResponse.json(emptyReport);
+      })
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CaretakerReportPage />
+      </QueryClientProvider>
+    );
+    await screen.findByText('No caretaker visits were recorded in this range.');
+
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Show this range' }));
+
+    await waitFor(() => expect(asked).toHaveLength(2));
+    expect(asked[1].has('from')).toBe(false);
+    expect(asked[1].get('to')).not.toBeNull();
+    expect(screen.queryByText('We couldn’t load the visit records')).not.toBeInTheDocument();
   });
 });

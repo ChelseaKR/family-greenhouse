@@ -32,7 +32,8 @@ not seen a reason to.
 
 2. **App-side entitlement only.** The trial is two attributes on the household METADATA
    row, `noCardTrialStartedAt` and `noCardTrialEndsAt`, written once by
-   `householdService.createHousehold` in the transaction that creates the household. No
+   `householdService.createHousehold` in the transaction that creates the household (one
+   operator-run exception: the 2026-11-19 amendment below). No
    Stripe customer, subscription, trial, price or checkout session is created to start, run
    or end it. No Stripe path reads or writes those attributes, and the webhook write map
    (`SubscriptionWriteField`) excludes them. Prices, `stripe_price_id_*`, `payments_enabled`
@@ -174,3 +175,34 @@ cannot do any of those.
 - **Opening Settings → Billing cannot be counted per household from existing logs.**
   `GET /billing/me` is also fetched by the app shell on every page. Only checkout starts are
   attributable to a household.
+
+## Amendment — 2026-11-19: one restart for households whose trial ended during the email outage
+
+From 2026-09-04 to 2026-11-19 nearly every app email failed, so households whose trial ran
+in that window got no reminders, digests or trial emails while it ran. On 2026-11-19 Chelsea
+approved option A of the outage write-up: a one-time service note whose admins of an ended
+trial are offered "another 14 days of Garden" if they reply, started by hand for those who
+ask. Decision 2 says the trial is written once. This is the only exception, and it is narrow:
+
+- **Operator-run, one household per run.** `npm run trial:restart-outage -- <householdId>`
+  (`backend/src/scripts/restartOutageTrial.ts`, rules in
+  `backend/src/services/outageTrialRestart.ts`). Dry run by default; `--confirm` writes.
+  Nothing calls it from a schedule, a webhook or a request handler.
+- **Outage households only.** It refuses unless `noCardTrialState` is `ended` and the trial
+  ended from 2026-09-04 up to 2026-11-20 00:00 UTC (`endedTrialDuringOutage`, the same test
+  that chose who was offered the 14 days). `ended` already excludes Stripe, App Store,
+  lifetime and paid-plan state and a running gift (decision 4 is unchanged).
+- **Once each.** A marker row, `SERVICE_NOTICE#trial-restart-2026-11 / HOUSEHOLD#{id}`, is
+  written in the same transaction as the dates and must not exist. The write is also
+  conditional on the old end date, and on the plan, gift, Stripe, App Store and lifetime
+  attributes being exactly as read.
+- **What it writes.** `noCardTrialStartedAt` = now and `noCardTrialEndsAt` = now + 14 days.
+  No claim row, no Stripe call, no email. The account rule (decision 5) is not relaxed: the
+  restart is the household's own trial, extended once, not a second claim.
+- **What follows.** The existing `trialEmails` job sends day 10 and day 14 once each from the
+  new dates (ADR 0039; no markers exist from the outage, because a failed send releases its
+  slot). The copy fixed on 2026-11-19 tells a household with plants from before the restart
+  how many it has. Checkout during the restarted trial defers the first charge to the new end
+  date, or charges at once in its last 48 h 30 min, as for any no-card trial (2026-10-23).
+
+The exception ends with the offer: a new restart for any other reason needs its own decision.

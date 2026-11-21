@@ -7,6 +7,7 @@ import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { formatCurrency, formatDate } from '@/i18n/format';
 import { isNativeApp } from '@/lib/platform';
+import { appStorePurchasesAvailable } from '@/services/appStoreAvailability';
 import {
   billingService,
   type Plan,
@@ -14,6 +15,7 @@ import {
   type SubscriptionState,
 } from '@/services/billingService';
 import { noCardTrialNoticeKind, type NoCardTrialPlacement } from './noCardTrialNoticeKind';
+import { CHANGE_PLAN_ROUTE } from './changePlanLink';
 
 /**
  * The in-app notices for the no-card Garden trial (ADR 0027).
@@ -108,11 +110,23 @@ export function NoCardTrialNoticeView({
   // The one place a trial household is shown what keeping Garden costs, on
   // the screen it sees most. Before this the dashboard notice only said
   // "Plans and billing", so the price stayed two screens away at the moment
-  // the household was deciding. Web and admin only: the apps sell nothing
+  // the household was deciding. Web and admin only: the apps show no price
   // (Guideline 3.1.1) and a member cannot check out. The amount is the
   // catalog's, never a constant, and with no published price there is no
   // button rather than a guessed one.
   const gardenMonthly = plans?.find((plan) => plan.id === 'garden')?.monthlyPrice;
+  // The iPhone app with Apple In-App Purchase on (ADR 0041) does sell plans,
+  // in Settings → Plan status, so an admin there gets a "See plans" button,
+  // never a price (the App Store's price is shown on that screen, from
+  // StoreKit). Only once the trial is ending or has ended: Apple charges when
+  // the person confirms and the free days stop counting at once, so a button
+  // in the first days would cost a household free days the web never takes.
+  const appStorePlansButton =
+    placement === 'dashboard' &&
+    native &&
+    canBuy &&
+    kind !== 'started' &&
+    appStorePurchasesAvailable();
   const keepGardenLabel =
     placement === 'dashboard' && !native && canBuy && isCount(gardenMonthly) && gardenMonthly > 0
       ? t(key(kind === 'ended' ? 'getGardenBack' : 'keepGarden'), {
@@ -181,12 +195,19 @@ export function NoCardTrialNoticeView({
         )}
         {keepGardenLabel && (
           <p>
-            <Link to="/settings/billing" className={buttonStyles({ size: 'sm' })}>
+            <Link to={CHANGE_PLAN_ROUTE} className={buttonStyles({ size: 'sm' })}>
               {keepGardenLabel}
             </Link>
           </p>
         )}
-        {placement === 'dashboard' && (
+        {appStorePlansButton && (
+          <p>
+            <Link to="/settings/billing" className={buttonStyles({ size: 'sm' })}>
+              {t('appStore.lockedSeePlans')}
+            </Link>
+          </p>
+        )}
+        {placement === 'dashboard' && !appStorePlansButton && (
           <p>
             <Link to="/settings/billing" className="font-medium underline">
               {native ? t('today.viewPlanStatus') : t(key('billingLink'))}

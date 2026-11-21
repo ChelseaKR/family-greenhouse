@@ -4,6 +4,16 @@ resource "aws_cognito_user_pool" "main" {
   username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
 
+  # A changed email address takes effect only after the person proves they
+  # receive mail at it (ADR 0048). Without this block the pool replaces the
+  # address at once and marks it unverified; with it, the old address stays
+  # the account's address, a code goes to the new one, and the change is made
+  # when that code comes back. It needs `email` in auto_verified_attributes,
+  # above. An in-place change to the pool.
+  user_attribute_update_settings {
+    attributes_require_verification_before_update = ["email"]
+  }
+
   # PLUS tier required to enable Threat Protection. Cost vs ESSENTIALS:
   # PLUS is ~$0.015/MAU after the free tier (~100 MAU), ESSENTIALS is
   # ~$0.0055/MAU. Tiny dollar amount at sub-1000 MAU; revisit if MAU
@@ -218,8 +228,12 @@ resource "aws_cognito_user_pool_client" "main" {
 
   supported_identity_providers = ["COGNITO"]
 
+  # `email_verified` is readable so the ID token says whether the pool has
+  # verified the address in `email`; the API reads it (middleware/auth.ts,
+  # ADR 0048). It is not, and cannot be, in write_attributes.
   read_attributes = [
     "email",
+    "email_verified",
     "name",
     "custom:household_id",
     "custom:household_role",
@@ -235,6 +249,11 @@ resource "aws_cognito_user_pool_client" "main" {
   # into ID-token claims, and are mutated exclusively by the backend through
   # AdminUpdateUserAttributes (see the cognito-idp grant in modules/api),
   # which enforces membership/role rules first.
+  #
+  # `email` has to stay writable: it is the sign-in name and a required
+  # attribute, and sign-up writes it through this client. A later change to it
+  # is held until the new address is verified (user_attribute_update_settings
+  # on the pool, ADR 0048).
   write_attributes = [
     "email",
     "name",

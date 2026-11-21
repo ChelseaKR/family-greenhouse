@@ -171,6 +171,88 @@ test.describe('A11y — public routes (WCAG 2.0/2.1/2.2 AA)', () => {
     await expectNoA11yViolations(page, 'sitter');
   });
 
+  // The populated token pages. Until 2026-11 these were scanned only in their
+  // invalid-token state, and docs/accessibility.md named the plant tag the
+  // sharpest gap: a stranger with no account acting on what a QR code shows.
+  // Stubbed at the API origin only, for the reason given on the sitter test.
+  test('plant tag scan page (populated)', async ({ page }) => {
+    await page.route('http://localhost:4000/tag/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          plantName: 'Monstera',
+          species: 'Monstera deliciosa',
+          careNote: 'Water when the top two inches are dry.',
+          careNoteSource: 'rule',
+          history: {
+            status: 'ok',
+            lastCare: {
+              taskType: 'water',
+              completedAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+              completedByName: 'Sam',
+              viaTag: true,
+            },
+            lastWatered: {
+              taskType: 'water',
+              completedAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+              completedByName: 'Sam',
+              viaTag: true,
+            },
+          },
+          tasks: [
+            {
+              taskId: 't1',
+              taskType: 'water',
+              dueDate: new Date(Date.now() - 1000).toISOString(),
+              overdue: true,
+            },
+          ],
+        }),
+      })
+    );
+    await page.goto('/tag/' + 'a'.repeat(32));
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Monstera');
+    await expectNoA11yViolations(page, 'plant-tag-populated');
+  });
+
+  test('kiosk page (populated)', async ({ page }) => {
+    await page.route('http://localhost:4000/kiosk/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          pollIntervalSeconds: 300,
+          tasks: [
+            {
+              taskId: 't1',
+              plantName: 'Monstera',
+              taskType: 'water',
+              dueDate: new Date(Date.now() - 1000).toISOString(),
+              spaceName: 'Living Room',
+              placementNote: 'east window, top shelf',
+              overdue: true,
+            },
+            {
+              taskId: 't2',
+              plantName: 'Fern',
+              taskType: 'mist',
+              dueDate: new Date(Date.now() + 3_600_000).toISOString(),
+              spaceName: null,
+              placementNote: null,
+              overdue: false,
+            },
+          ],
+        }),
+      })
+    );
+    await page.goto('/kiosk/' + 'a'.repeat(32));
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('Monstera')).toBeVisible();
+    await expectNoA11yViolations(page, 'kiosk-populated');
+  });
+
   // Content and legal routes. These need no fixtures at all — they render
   // from bundled content — and none of them had ever been scanned (#448).
   // `/legal/*` and `/support` are the pages a user is sent to at exactly the

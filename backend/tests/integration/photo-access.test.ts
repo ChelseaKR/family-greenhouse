@@ -363,12 +363,21 @@ describe('the one route that returns the reference itself', () => {
       routeKey: 'POST /plants/{id}/image',
       pathParameters: { id: plantId },
       identity,
-      body: { contentType: 'image/jpeg' },
+      body: { contentType: 'image/jpeg', contentLength: 1234 },
     });
     expect(presign.statusCode).toBe(200);
-    const { imageUrl } = presign.body as { imageUrl: string };
-    expect(imageUrl.startsWith(`${ASSETS}/plants/${householdId}/${plantId}/`)).toBe(true);
+    const { imageUrl, uploadUrl } = presign.body as { imageUrl: string; uploadUrl: string };
+    // It names the upload's holding key, which no response ever signs for reading.
+    expect(imageUrl.startsWith(`${ASSETS}/uploads/${householdId}/${plantId}/`)).toBe(true);
     expect(new URL(imageUrl).search).toBe('');
+    // The upload URL is signed for that key, that type and that exact size:
+    // storage refuses a PUT whose Content-Type or Content-Length differs.
+    const signed = new URL(uploadUrl);
+    expect(decodeURIComponent(signed.pathname)).toContain(`/uploads/${householdId}/${plantId}/`);
+    expect(signed.searchParams.get('X-Amz-SignedHeaders')?.split(';')).toEqual(
+      expect.arrayContaining(['content-length', 'content-type', 'host'])
+    );
+    expect(signed.searchParams.get('X-Amz-Expires')).toBe('300');
   });
 });
 

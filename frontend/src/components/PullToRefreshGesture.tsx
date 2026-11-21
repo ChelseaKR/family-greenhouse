@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { REFRESH_REQUEST_EVENT } from '@/lib/refreshRequest';
 import { useTranslation } from 'react-i18next';
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
@@ -73,11 +74,18 @@ export default function PullToRefreshGesture() {
       setPull(0);
     };
 
+    // The same refresh on request, without the gesture (lib/refreshRequest.ts).
+    const onRequest = () => {
+      if (!refreshingRef.current) void refresh();
+    };
+
+    window.addEventListener(REFRESH_REQUEST_EVENT, onRequest);
     window.addEventListener('touchstart', onStart, { passive: true });
     window.addEventListener('touchmove', onMove, { passive: true });
     window.addEventListener('touchend', onEnd);
     window.addEventListener('touchcancel', onEnd);
     return () => {
+      window.removeEventListener(REFRESH_REQUEST_EVENT, onRequest);
       window.removeEventListener('touchstart', onStart);
       window.removeEventListener('touchmove', onMove);
       window.removeEventListener('touchend', onEnd);

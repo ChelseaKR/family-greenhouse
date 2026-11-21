@@ -17,6 +17,19 @@ describe('AuthShell', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Welcome back' })).toBeInTheDocument();
   });
 
+  it("is the page's main landmark, holding the heading and the form", () => {
+    // Sign in, sign up, confirm and reset rendered no landmark at all: a
+    // screen-reader user had no main region to jump to (WCAG 1.3.1, 2.4.1).
+    renderShell(
+      <AuthShell title="Welcome back">
+        <p>form goes here</p>
+      </AuthShell>
+    );
+    const main = screen.getByRole('main');
+    expect(main).toContainElement(screen.getByRole('heading', { level: 1 }));
+    expect(main).toContainElement(screen.getByText('form goes here'));
+  });
+
   it('renders children inside the shell card', () => {
     renderShell(
       <AuthShell title="Welcome back">

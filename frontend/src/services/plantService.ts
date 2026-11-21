@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { api } from './api';
+import i18n from '@/i18n';
 import { track } from './analytics';
+import { getNativePlatform } from '@/lib/platform';
 import type { IdentifyCreditBalance } from './billingService';
 import type { SeasonalCadence } from '@/features/tasks/seasonalCadence';
 
@@ -290,6 +292,7 @@ export interface ImportPlantsResponse {
 
 export interface ImageUploadResponse {
   uploadUrl: string;
+  /** Names the upload, for the confirm call. It is not the stored photo. */
   imageUrl: string;
 }
 
@@ -359,13 +362,19 @@ export const plantService = {
   },
 
   /**
-   * Presign an image upload. `contentType` must be one of image/jpeg,
-   * image/png, image/webp and MUST match the Content-Type header of the
-   * subsequent PUT — the backend signs the URL against it.
+   * Presign an image upload for one file. `contentType` must be one of
+   * image/jpeg, image/png, image/webp and `contentLength` is the file's exact
+   * size in bytes. The backend signs the URL for both, so the subsequent PUT
+   * MUST send that Content-Type header and a body of exactly that size.
    */
-  async getImageUploadUrl(plantId: string, contentType: string): Promise<ImageUploadResponse> {
+  async getImageUploadUrl(
+    plantId: string,
+    contentType: string,
+    contentLength: number
+  ): Promise<ImageUploadResponse> {
     const response = await api.post<ImageUploadResponse>(`/plants/${plantId}/image`, {
       contentType,
+      contentLength,
     });
     return response.data;
   },
@@ -396,9 +405,9 @@ export const plantService = {
       };
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) resolve();
-        else reject(new Error(`Upload failed with status ${xhr.status}`));
+        else reject(new Error(i18n.t('plants.photoUpload.failedStatus', { status: xhr.status })));
       };
-      xhr.onerror = () => reject(new Error('Network error during upload'));
+      xhr.onerror = () => reject(new Error(i18n.t('plants.photoUpload.networkError')));
       // Abort the in-flight PUT when the caller cancels (e.g. unmount) so an
       // abandoned upload doesn't run to completion and confirm server-side.
       xhr.onabort = () => reject(new DOMException('Upload aborted', 'AbortError'));
@@ -425,9 +434,16 @@ export const plantService = {
     return response.data;
   },
 
+  /**
+   * Inside the iPhone app the request says `useTopUpCredits: false`, so the
+   * server spends only the plan's monthly allowance and never an
+   * identification pack bought on the website (ADR 0044, App Review
+   * Guideline 3.1.3(b)). The website and the Android app send nothing extra.
+   */
   async identifyPlant(imageBase64: string): Promise<IdentifyResponse> {
     const response = await api.post<IdentifyResponse>('/plants/identify', {
       image: imageBase64,
+      ...(getNativePlatform() === 'ios' ? { useTopUpCredits: false } : {}),
     });
     return response.data;
   },

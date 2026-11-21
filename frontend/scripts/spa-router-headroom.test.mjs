@@ -83,11 +83,13 @@ const PR_1103_ROUTES = [
   '/pet-safe/polka-dot-plant',
 ];
 
-/** Routes feat/blog-answer-first (head fdb42fbe, no PR yet) adds to the sitemap. */
-const BLOG_ANSWER_FIRST_ROUTES = [
-  '/blog/do-yellow-leaves-mean-overwatering',
-  '/blog/can-you-overwater-a-plant',
-];
+/**
+ * Routes feat/blog-answer-first (head fdb42fbe, no PR yet) adds to the sitemap.
+ * Its other post, /blog/do-yellow-leaves-mean-overwatering, was merged into
+ * the overwatering post on 2026-11-15 and now answers a 301
+ * (src/config/redirects.json, tested in spa-router.test.mjs).
+ */
+const BLOG_ANSWER_FIRST_ROUTES = ['/blog/can-you-overwater-a-plant'];
 
 /**
  * Routes content/watering-guides-batch2 adds to the sitemap. The fixture is
@@ -286,9 +288,29 @@ test('the corpus actually covers main, #1102, #1103 and feat/blog-answer-first',
   assert.ok(urls.length > 500, `corpus has only ${urls.length} URLs`);
 });
 
+/**
+ * Public routes taken out of `STATIC_ROUTES` after the fixture was cut, on
+ * purpose. Each is still an App.tsx route, so it moves from its prerendered
+ * object to the app shell (200, `noindex`): the page keeps working, it just
+ * stops being an indexable prerendered URL. `/gift` left while gifts are not
+ * offered (see the note in public-routes.mjs); delete it here when it returns.
+ */
+const WITHDRAWN_ROUTES = ['/gift'];
+
 test('every URL reaches the same page or the same 404 as before', () => {
-  const changed = differences(before, after).filter((row) => !isCaseVariantOfMovedPage(row.url));
+  const changed = differences(before, after).filter(
+    (row) => !isCaseVariantOfMovedPage(row.url) && !WITHDRAWN_ROUTES.includes(row.url)
+  );
   assert.deepEqual(changed, [], 'these URLs now answer differently than on main');
+});
+
+test('a withdrawn public route still reaches the app, through the shell', () => {
+  for (const route of WITHDRAWN_ROUTES) {
+    assert.ok(!publicRoutePaths().includes(route), `${route} is public again; drop it here`);
+    for (const url of [route, `${route}/`, route.toUpperCase()]) {
+      assert.equal(outcome(after(url)), 'shell (200)', url);
+    }
+  }
 });
 
 test('a mis-capitalised content URL now gets its prerendered page instead of the shell', () => {

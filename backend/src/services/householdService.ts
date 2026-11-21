@@ -386,6 +386,9 @@ function toHousehold(item: Record<string, unknown>): Household {
     // rather than as UTC, so "we were never told" stays distinguishable from
     // "they chose UTC" (services/householdTimeZone.ts, ADR 0010, ADR 0025).
     timezone: normalizeHouseholdTimeZone(item.timezone),
+    ...(typeof item.invitesRevokedAt === 'string'
+      ? { invitesRevokedAt: item.invitesRevokedAt }
+      : {}),
     createdAt: item.createdAt as string,
     createdBy: item.createdBy as string,
   };
@@ -584,7 +587,33 @@ export async function getHouseholdMembersPublic(
   }));
 }
 
-export async function createInvite(householdId: string, userId: string): Promise<HouseholdInvite> {
+/**
+ * How many people one invite admits (ADR 0047).
+ *
+ * A link is made to be passed around a household, so it admits a few people
+ * and then stops. An emailed invite was addressed to one person, so it admits
+ * one. Either stops working when it is used up, when it expires, when an
+ * admin turns the household's invite links off, and when anyone leaves or is
+ * removed from the household.
+ */
+export const INVITE_LINK_MAX_USES = 5;
+export const INVITE_EMAIL_MAX_USES = 1;
+
+export type InviteChannel = 'link' | 'email';
+
+/** An invite that exists but can no longer be used to join. */
+export class InviteUnavailableError extends Error {
+  constructor() {
+    super('Invite is no longer valid');
+    this.name = 'InviteUnavailableError';
+  }
+}
+
+export async function createInvite(
+  householdId: string,
+  userId: string,
+  channel: InviteChannel = 'link'
+): Promise<HouseholdInvite> {
   // 32 hex chars (128 bits). Pre-2026-05-31 this was 12 chars (~48 bits),
   // brute-forceable from a leaked DDB dump or log line. UUIDv4 collisions
   // at this length are cosmologically unlikely; the partition key collision
@@ -599,6 +628,8 @@ export async function createInvite(householdId: string, userId: string): Promise
     createdBy: userId,
     createdAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
+    maxUses: channel === 'email' ? INVITE_EMAIL_MAX_USES : INVITE_LINK_MAX_USES,
+    uses: 0,
   };
 
   const item: DynamoDBItem = {
@@ -614,6 +645,14 @@ export async function createInvite(householdId: string, userId: string): Promise
   return invite;
 }
 
+/**
+ * An invite that has not expired and has a use left, or null.
+ *
+ * A row written before invites were counted carries no `maxUses` or `uses`;
+ * it reads as a link with every use left, so a pending invite keeps working.
+ * This does not look at the household: a caller that has the household row
+ * also asks `inviteRevokedByHousehold`.
+ */
 export async function getInvite(code: string): Promise<HouseholdInvite | null> {
   const result = await dynamodb.send(
     new GetCommand({
@@ -635,14 +674,58 @@ export async function getInvite(code: string): Promise<HouseholdInvite | null> {
     createdBy: result.Item.createdBy as string,
     createdAt: result.Item.createdAt as string,
     expiresAt: result.Item.expiresAt as string,
+    maxUses: typeof result.Item.maxUses === 'number' ? result.Item.maxUses : INVITE_LINK_MAX_USES,
+    uses: typeof result.Item.uses === 'number' ? result.Item.uses : 0,
   };
 
   // Check if expired
   if (new Date(invite.expiresAt) < new Date()) {
     return null;
   }
+  if (invite.uses >= invite.maxUses) {
+    return null;
+  }
 
   return invite;
+}
+
+/**
+ * True when the household turned this invite off: it was created at or before
+ * the household's `invitesRevokedAt`.
+ */
+export function inviteRevokedByHousehold(
+  invite: Pick<HouseholdInvite, 'createdAt'>,
+  household: Pick<Household, 'invitesRevokedAt'>
+): boolean {
+  return !!household.invitesRevokedAt && invite.createdAt <= household.invitesRevokedAt;
+}
+
+/**
+ * Turn off every invite the household has made so far. One write, on the
+ * household row: an invite is compared against it when it is looked up and
+ * again, atomically, when it is used. Invites made after this work as usual.
+ * Returns the instant, or null when the household no longer exists.
+ */
+export async function revokeHouseholdInvites(
+  householdId: string,
+  now: Date = new Date()
+): Promise<string | null> {
+  const revokedAt = now.toISOString();
+  try {
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
+        UpdateExpression: 'SET invitesRevokedAt = :now',
+        ConditionExpression: 'attribute_exists(PK)',
+        ExpressionAttributeValues: { ':now': revokedAt },
+      })
+    );
+  } catch (err) {
+    if ((err as Error).name === 'ConditionalCheckFailedException') return null;
+    throw err;
+  }
+  return revokedAt;
 }
 
 /**
@@ -660,10 +743,17 @@ export async function getInvite(code: string): Promise<HouseholdInvite | null> {
  * via `if_not_exists(memberCount, :base)` inside the same transaction (same
  * design as plantService.createPlant — see the comment there).
  *
+ * Joining by invite (ADR 0047): when `invite` is given, the same transaction
+ * takes one of its uses and requires that the household has not turned it
+ * off. So an invite can never admit more people than it allows, and a join
+ * can never slip in beside the write that turned the invite off.
+ *
  * Failure mapping (via per-item CancellationReasons):
  *   - item 0 (member Put) failed   → rethrown with name
  *     'ConditionalCheckFailedException' so existing callers keep mapping it
  *     to the friendly "already a member" 400.
+ *   - item 2 (invite use) failed, or item 1 failed because the household
+ *     turned the invite off     → InviteUnavailableError (callers map to 400).
  *   - item 1 (counter) failed      → PlanLimitError (callers map to 402).
  */
 export async function addMember(
@@ -672,7 +762,8 @@ export async function addMember(
   userName: string,
   userEmail: string,
   maxMembers: Limit,
-  role: 'admin' | 'member' = 'member'
+  role: 'admin' | 'member' = 'member',
+  invite?: Pick<HouseholdInvite, 'code' | 'createdAt' | 'maxUses'>
 ): Promise<HouseholdMember> {
   const now = new Date().toISOString();
 
@@ -715,34 +806,61 @@ export async function addMember(
   // no `:max` value — DynamoDB rejects an ExpressionAttributeValue that the
   // expression never references.
   const capped = maxMembers !== null;
+  const counterConditions = ['attribute_exists(PK)'];
+  const counterValues: Record<string, unknown> = { ':base': base, ':one': 1 };
+  if (capped) {
+    counterConditions.push('(attribute_not_exists(memberCount) OR memberCount < :max)');
+    counterValues[':max'] = maxMembers;
+  }
+  if (invite) {
+    // The household has not turned this invite off since it was made.
+    counterConditions.push(
+      '(attribute_not_exists(invitesRevokedAt) OR invitesRevokedAt < :inviteCreatedAt)'
+    );
+    counterValues[':inviteCreatedAt'] = invite.createdAt;
+  }
+
+  const transactItems: object[] = [
+    {
+      Put: {
+        TableName: TABLE_NAME,
+        Item: item,
+        ConditionExpression: 'attribute_not_exists(PK)',
+      },
+    },
+    {
+      Update: {
+        TableName: TABLE_NAME,
+        Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
+        UpdateExpression: 'SET memberCount = if_not_exists(memberCount, :base) + :one',
+        ConditionExpression: counterConditions.join(' AND '),
+        ExpressionAttributeValues: counterValues,
+      },
+    },
+  ];
+  if (invite) {
+    transactItems.push({
+      Update: {
+        TableName: TABLE_NAME,
+        Key: { PK: `INVITE#${invite.code}`, SK: 'METADATA' },
+        // Takes one use. `uses` is absent on a row written before invites
+        // were counted, which reads as none taken.
+        UpdateExpression: 'SET #uses = if_not_exists(#uses, :zero) + :one',
+        ConditionExpression:
+          'attribute_exists(PK) AND (attribute_not_exists(#uses) OR #uses < :maxUses) AND expiresAt > :now',
+        ExpressionAttributeNames: { '#uses': 'uses' },
+        ExpressionAttributeValues: {
+          ':zero': 0,
+          ':one': 1,
+          ':maxUses': invite.maxUses,
+          ':now': now,
+        },
+      },
+    });
+  }
 
   try {
-    await dynamodb.send(
-      new TransactWriteCommand({
-        TransactItems: [
-          {
-            Put: {
-              TableName: TABLE_NAME,
-              Item: item,
-              ConditionExpression: 'attribute_not_exists(PK)',
-            },
-          },
-          {
-            Update: {
-              TableName: TABLE_NAME,
-              Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
-              UpdateExpression: 'SET memberCount = if_not_exists(memberCount, :base) + :one',
-              ConditionExpression: capped
-                ? 'attribute_exists(PK) AND (attribute_not_exists(memberCount) OR memberCount < :max)'
-                : 'attribute_exists(PK)',
-              ExpressionAttributeValues: capped
-                ? { ':base': base, ':one': 1, ':max': maxMembers }
-                : { ':base': base, ':one': 1 },
-            },
-          },
-        ],
-      })
-    );
+    await dynamodb.send(new TransactWriteCommand({ TransactItems: transactItems }));
   } catch (err) {
     const reasons = transactCancellationReasons(err);
     if (reasons[0]?.Code === 'ConditionalCheckFailed') {
@@ -753,7 +871,19 @@ export async function addMember(
         name: 'ConditionalCheckFailedException',
       });
     }
+    if (invite && reasons[2]?.Code === 'ConditionalCheckFailed') {
+      // Used up, expired, or gone between the lookup and this write.
+      throw new InviteUnavailableError();
+    }
     if (reasons[1]?.Code === 'ConditionalCheckFailed') {
+      // The household row refused. With an invite that is the member cap or
+      // the invite having been turned off; read the row to say which.
+      if (invite) {
+        const household = await getHousehold(householdId);
+        if (!household || inviteRevokedByHousehold(invite, household)) {
+          throw new InviteUnavailableError();
+        }
+      }
       throw new PlanLimitError(`Member limit of ${maxMembers} reached`);
     }
     throw err;
@@ -764,7 +894,11 @@ export async function addMember(
 
 /**
  * Delete a member row and decrement `memberCount` (floored at 0) in one
- * transaction. Failure handling preserves the old idempotent semantics:
+ * transaction. The same write turns off every invite the household has made
+ * so far (ADR 0047), for every way a member goes: removed by an admin,
+ * leaving, or deleting their account. Someone who is out cannot come back
+ * with a link they still hold. Failure handling preserves the old idempotent
+ * semantics:
  *   - member row already gone → resolve without touching the counter.
  *   - counter already at 0 / METADATA row missing → fall back to a plain
  *     unconditional delete (the member must still be removed; the counter
@@ -792,10 +926,11 @@ export async function removeMember(householdId: string, userId: string): Promise
       Update: {
         TableName: TABLE_NAME,
         Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
-        UpdateExpression: 'SET memberCount = if_not_exists(memberCount, :one) - :one',
+        UpdateExpression:
+          'SET memberCount = if_not_exists(memberCount, :one) - :one, invitesRevokedAt = :now',
         ConditionExpression:
           'attribute_exists(PK) AND (attribute_not_exists(memberCount) OR memberCount > :zero)',
-        ExpressionAttributeValues: { ':one': 1, ':zero': 0 },
+        ExpressionAttributeValues: { ':one': 1, ':zero': 0, ':now': new Date().toISOString() },
       },
     },
   ];
@@ -818,8 +953,9 @@ export async function removeMember(householdId: string, userId: string): Promise
     }
     if (reasons[0]?.Code !== 'ConditionalCheckFailed') {
       // Only the counter floor blocked the transaction; the member row still
-      // exists and must go.
+      // exists and must go. The invites are turned off on their own write.
       await dynamodb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: memberKey }));
+      await revokeHouseholdInvites(householdId);
     }
     // else: member row already gone — idempotent no-op, counter untouched.
   }

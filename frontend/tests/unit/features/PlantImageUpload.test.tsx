@@ -65,8 +65,95 @@ describe('PlantImageUpload', () => {
     await waitFor(() => expect(plantService.uploadImage).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(plantService.confirmImageUpload).toHaveBeenCalledTimes(1));
     expect(vi.mocked(plantService.uploadImage).mock.calls[1][1]).toBe(file);
+    // Each presign declares the type and the exact size of the file it is for.
+    expect(plantService.getImageUploadUrl).toHaveBeenLastCalledWith(
+      'plant-1',
+      'image/jpeg',
+      file.size
+    );
     expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
     expect(onUploadSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  describe('while a photo is uploading', () => {
+    // Held open so the pending state can be looked at.
+    function holdUpload() {
+      let finish: () => void = () => {};
+      vi.mocked(plantService.uploadImage).mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = () => resolve();
+          })
+      );
+      return () => finish();
+    }
+
+    it('keeps focus on the file control instead of dropping it', async () => {
+      const finish = holdUpload();
+      const user = userEvent.setup();
+      renderUpload();
+      const input = screen.getByLabelText(/upload photo/i);
+      input.focus();
+
+      await user.upload(input, new File(['photo'], 'fern.jpg', { type: 'image/jpeg' }));
+      await screen.findByRole('progressbar');
+
+      // A disabled control cannot keep focus, so the keyboard user who chose
+      // the file was sent back to the top of the page (WCAG 2.4.3).
+      expect(input).not.toBeDisabled();
+      expect(input).toHaveAttribute('aria-disabled', 'true');
+      expect(input).toHaveFocus();
+      finish();
+      await waitFor(() => expect(plantService.confirmImageUpload).toHaveBeenCalledTimes(1));
+      expect(input).not.toHaveAttribute('aria-disabled');
+    });
+
+    it('does not open the picker again until the upload is done', async () => {
+      const finish = holdUpload();
+      const user = userEvent.setup();
+      renderUpload();
+      const input = screen.getByLabelText(/upload photo/i);
+      await user.upload(input, new File(['photo'], 'fern.jpg', { type: 'image/jpeg' }));
+      await screen.findByRole('progressbar');
+
+      const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+      input.dispatchEvent(click);
+      expect(click.defaultPrevented).toBe(true);
+      finish();
+      await waitFor(() => expect(plantService.confirmImageUpload).toHaveBeenCalledTimes(1));
+    });
+
+    it('gives the progress bar a name', async () => {
+      const finish = holdUpload();
+      const user = userEvent.setup();
+      renderUpload();
+      await user.upload(
+        screen.getByLabelText(/upload photo/i),
+        new File(['photo'], 'fern.jpg', { type: 'image/jpeg' })
+      );
+
+      expect(await screen.findByRole('progressbar')).toHaveAccessibleName('Sending the photo…');
+      finish();
+      await waitFor(() => expect(plantService.confirmImageUpload).toHaveBeenCalledTimes(1));
+    });
+
+    it('says that the upload started and that it finished', async () => {
+      const finish = holdUpload();
+      const user = userEvent.setup();
+      renderUpload();
+      // The region is there before it has anything to say.
+      const status = screen.getByRole('status');
+      expect(status).toBeEmptyDOMElement();
+
+      await user.upload(
+        screen.getByLabelText(/upload photo/i),
+        new File(['photo'], 'fern.jpg', { type: 'image/jpeg' })
+      );
+      await waitFor(() => expect(status).toHaveTextContent('Sending the photo…'));
+
+      finish();
+      await waitFor(() => expect(status).toHaveTextContent('Photo added'));
+    });
   });
 
   describe('inside the native (Capacitor) shells', () => {

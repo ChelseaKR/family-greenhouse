@@ -20,12 +20,31 @@ dmarc_rua_email                = "dmarc@familygreenhouse.net"
 # The SSM parameter /family-greenhouse/perenual-api-key is not managed here;
 # deleting it is a separate owner step.
 
-# CI/CD: provisions the GitHub OIDC provider + deploy role (modules/cicd).
-# The role ARN goes into the AWS_DEPLOY_ROLE_ARN + AWS_PRODUCTION_ROLE_ARN
-# repo secrets. Trust is bound to this repo's main branch + v* tags +
-# the 'production' GitHub environment.
+# CI/CD: provisions the GitHub OIDC provider, the three CI/CD roles and the
+# permissions boundary (modules/cicd, ADR 0049). The role ARNs go into the
+# AWS_PRODUCTION_ROLE_ARN, AWS_RELEASE_ROLE_ARN and AWS_ALERT_RELAY_ROLE_ARN
+# repo secrets. Each role is assumable only from named GitHub environments of
+# this repo; none trusts a branch or a tag. An admin applies changes to that
+# module; CD refuses to (docs/cicd-setup.md).
 github_org  = "ChelseaKR"
 github_repo = "family-greenhouse"
+
+# GitHub environments whose jobs may assume the deploy role (ADR 0049):
+# `production` for the production Terraform job, `staging-infrastructure` for
+# the staging one. BOTH must have a required reviewer under Settings ->
+# Environments. An environment listed here with no reviewer is a way to the
+# deploy role that nobody approves, and GitHub creates a missing environment,
+# with no reviewer, the first time a job names it. Create and protect
+# `staging-infrastructure` before an admin applies this.
+cicd_deploy_environments = ["production", "staging-infrastructure"]
+
+# Permissions boundary on the Lambda execution roles (ADR 0049). OFF until
+# staging has run under it: set to true once a staging deploy and its smoke
+# test have passed with the boundary on. Until then a production role's own
+# policy is the only limit on it. CD can turn this on and cannot turn it off
+# again: removing a boundary is an admin action
+# (aws iam delete-role-permissions-boundary), as docs/cicd-setup.md describes.
+iam_permissions_boundary_enabled = false
 
 # Cost guardrail. The running app is ~$2-3/mo; this catches a runaway. Cost
 # Anomaly Detection (monitoring module) handles spend *spikes* separately.
@@ -300,14 +319,28 @@ trial_lifecycle_emails_enabled = true
 
 # Apple In-App Purchase for the iPhone app (ADR 0041), exactly as staging sets
 # it (#1064). It sets APP_STORE_BILLING_ENABLED = "1" on the billing Lambda, so
-# the three /billing/app-store/* routes stop answering 404. App Review buys
-# with a Sandbox Apple Account against this production API; without this line
-# that purchase is refused. It needs payments_enabled = "1" above and
-# commercialHoldActive = false in commercial-status.json, both already true.
-# Sandbox transactions are accepted here on purpose (APP_STORE_ENVIRONMENTS is
-# deliberately not set, so the backend default "Production,Sandbox" applies);
-# narrowing that to "Production" after approval is a separate change. No
-# secret is involved: Apple's signed transactions and notifications are
-# verified against the pinned Apple Root CA - G3. Kill switch: set "0" and
-# ship a tag; a recorded subscription keeps its entitlement.
+# the three /billing/app-store/* routes stop answering 404. It needs
+# payments_enabled = "1" above and commercialHoldActive = false in
+# commercial-status.json, both already true. No secret is involved: Apple's
+# signed transactions and notifications are verified against the pinned Apple
+# Root CA - G3. Kill switch: set "0" and ship a tag; a recorded subscription
+# keeps its entitlement.
 app_store_billing_enabled = "1"
+
+# Which App Store environments grant a plan (ADR 0045). "Production" means a
+# Sandbox purchase, which is free, grants nothing here. It sets
+# APP_STORE_ENVIRONMENTS on the billing Lambda.
+#
+# The only other value is "Production,Sandbox". Use it for the days around an
+# App Store submission, from the owner's TestFlight purchase check until Apple
+# approves the build: both buy in Sandbox against this API. To open it, change
+# the value and put a dated note on the line directly above it, in this form
+# (a wiring test refuses the open value without the note):
+#
+#   sandbox-window: opened 2027-01-05 for App Review
+#
+# Set it back to "Production" and delete the note in the first release after
+# approval. Each change takes effect at the next production tag. A Sandbox
+# subscription recorded while it was open keeps its plan until the expiry
+# already recorded; later renewals are not applied.
+app_store_environments = "Production"

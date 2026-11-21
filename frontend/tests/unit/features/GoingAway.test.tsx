@@ -8,7 +8,7 @@
  * did not land, offer Garden to a household that has it, or sell inside the
  * apps.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -19,6 +19,21 @@ import { GoingAwaySoonCard, GOING_AWAY_ROUTE } from '@/features/dashboard/GoingA
 import { useAuthStore } from '@/store/authStore';
 import { usePrefsStore } from '@/store/prefsStore';
 import { server } from '../../msw/server';
+
+// Apple In-App Purchase in the iPhone app (ADR 0041): off unless a test turns
+// it on. The plans note follows the same switch, as the real module's does.
+const appStoreOn = vi.fn(() => false);
+vi.mock('@/services/appStoreAvailability', async () => {
+  const actual = await vi.importActual<typeof import('@/services/appStoreAvailability')>(
+    '@/services/appStoreAvailability'
+  );
+  return {
+    ...actual,
+    appStorePurchasesAvailable: () => appStoreOn(),
+    nativePlanNoteKey: () =>
+      appStoreOn() ? 'appStore.plansInSettings' : 'settings.billing.nativeUnavailable',
+  };
+});
 
 const API = 'http://localhost:4000';
 const DAY = 24 * 60 * 60 * 1000;
@@ -81,6 +96,7 @@ interface Setup {
   links?: unknown[];
   plansStatus?: number;
   noCardTrial?: { state: 'active' | 'ended'; endsAt: string };
+  plans?: unknown[];
 }
 
 /** Every read the card makes, and a record of the links it creates. */
@@ -90,6 +106,7 @@ function stub({
   links = [],
   plansStatus = 200,
   noCardTrial,
+  plans = PLANS,
 }: Setup = {}) {
   useAuthStore.setState({
     user: {
@@ -128,7 +145,7 @@ function stub({
         ? HttpResponse.json({
             paymentsAvailable: true,
             commercialHold: { active: false, effectiveDate: '2026-09-01' },
-            plans: PLANS,
+            plans,
           })
         : HttpResponse.json({ message: 'nope' }, { status: plansStatus });
     }),
@@ -180,6 +197,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete (window as { Capacitor?: unknown }).Capacitor;
+  appStoreOn.mockReturnValue(false);
 });
 
 describe('Going away? on the sitter-link form', () => {
@@ -201,8 +219,32 @@ describe('Going away? on the sitter-link form', () => {
     expect(scoped.getByText(/printable care brief/i)).toBeVisible();
     expect(
       scoped.getByRole('link', { name: 'Upgrade to Garden for $4.99 a month' })
-    ).toHaveAttribute('href', '/settings/billing');
+    ).toHaveAttribute('href', '/settings/billing#change-plan');
     expect(scoped.getByText(/your free 7-day link is still yours/i)).toBeVisible();
+  });
+
+  it('names the yearly price first when Garden sells yearly, and the button opens the plan choice', async () => {
+    // ADR 0042: the plan grid opens on Yearly, so "$2.99 a month" on the
+    // button opened onto "$24.99 a year". Both prices are in the sentence;
+    // the button names the choice rather than one of them.
+    const user = userEvent.setup();
+    const yearly = PLANS.map((p) =>
+      p.id === 'garden' ? { ...p, monthlyPrice: 2.99, annualPrice: 24.99 } : p
+    );
+    stub({ plans: yearly });
+    renderCard();
+
+    await typeLength(user, '14');
+
+    const scoped = within(await screen.findByTestId('going-away-offer'));
+    expect(
+      scoped.getByText('Garden is $24.99 a year or $2.99 a month for the whole household. It adds:')
+    ).toBeVisible();
+    expect(scoped.getByRole('link', { name: 'Choose a Garden plan' })).toHaveAttribute(
+      'href',
+      '/settings/billing#change-plan'
+    );
+    expect(scoped.queryByRole('link', { name: /Upgrade to Garden for/ })).not.toBeInTheDocument();
   });
 
   it('never blocks the free link: one tap goes back to 7 days and the link is created', async () => {
@@ -294,6 +336,46 @@ describe('Going away? on the sitter-link form', () => {
     expect(within(offer).getByText(/plan changes aren't available in the app/i)).toBeVisible();
     // The free path is still offered.
     expect(within(offer).getByRole('button', { name: 'Use 7 days instead' })).toBeVisible();
+  });
+
+  it('in the iPhone app with In-App Purchase on, an admin gets "See plans" and still no price', async () => {
+    const user = userEvent.setup();
+    (window as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    appStoreOn.mockReturnValue(true);
+    stub();
+    renderCard();
+
+    await typeLength(user, '14');
+    const offer = await screen.findByTestId('going-away-offer');
+    expect(
+      within(offer).getByText(
+        'Plans are in Settings → Plan status, where a household admin can subscribe.'
+      )
+    ).toBeVisible();
+    expect(within(offer).getByRole('link', { name: 'See plans' })).toHaveAttribute(
+      'href',
+      '/settings/billing'
+    );
+    expect(offer.textContent).not.toContain('$');
+    expect(within(offer).getByRole('button', { name: 'Use 7 days instead' })).toBeVisible();
+  });
+
+  it('in the iPhone app with In-App Purchase on, a member gets the sentence and no button', async () => {
+    const user = userEvent.setup();
+    (window as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    appStoreOn.mockReturnValue(true);
+    stub({ role: 'member' });
+    renderCard();
+
+    await typeLength(user, '14');
+    const offer = await screen.findByTestId('going-away-offer');
+    expect(within(offer).queryByRole('link', { name: 'See plans' })).toBeNull();
   });
 });
 

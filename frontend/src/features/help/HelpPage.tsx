@@ -67,7 +67,7 @@ export function HelpPage() {
   const searching = query.trim().length > 0;
 
   return (
-    <PublicShell plainHeader={isAuthenticated}>
+    <PublicShell plainHeader={isAuthenticated} contentLang="en">
       <BackToApp show={isAuthenticated} />
       <PageIntro
         eyebrow="Help & FAQ"
@@ -91,7 +91,7 @@ export function HelpPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="cancel, reminder, sitter, export…"
-          className="mt-2 w-full rounded-lg border border-dew bg-paper px-4 py-3 text-base text-ink placeholder:text-gray-500 focus:border-primary-500 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
+          className="mt-2 w-full rounded-lg border border-primary-500 bg-paper px-4 py-3 text-base text-ink placeholder:text-gray-500 focus:border-primary-500 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
         />
         {/* Announce the filtered count, not just the visual change: a
             keyboard/screen-reader user typing here otherwise gets no feedback

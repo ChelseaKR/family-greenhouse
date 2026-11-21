@@ -871,7 +871,10 @@ to Seedling on its own. Nothing is charged, and no card is asked for to start it
 
 - **App-side only.** The trial is two attributes on the household METADATA row,
   `noCardTrialStartedAt` and `noCardTrialEndsAt`, written once by
-  `householdService.createHousehold`. No Stripe customer, subscription, trial,
+  `householdService.createHousehold`. The one exception is an operator-run
+  restart for households whose trial ended during the 2026-09 to 2026-11 email
+  outage, once each (ADR 0027, amendment of 2026-11-19; `docs/runbooks.md`). No
+  Stripe customer, subscription, trial,
   price or checkout session is created to start, run or end it. No Stripe path
   reads or writes those attributes: `SubscriptionWriteField` excludes them.
 - **Ends on the clock.** `noCardTrialState` (`models/plans.ts`) compares the time
@@ -943,18 +946,16 @@ production** (owner decision 2026-10-23, `infrastructure/environments/production
   trial is active and ends in four days or fewer.
 - **Day 14:** "You are back on Seedling, and nothing was deleted", to the admins of a
   household whose trial ended in the last three days.
-- **First charge:** the day-10 email says a household that starts Garden before the
-  checkout cutoff (the end minus 48 h 30 min, printed as a date) adds a card then
-  and is first charged on the trial's end date; started later, or after the
-  trial (day 14), the first charge is the day it starts. Same rule as checkout.
-- **Prices:** both emails name the catalog's Garden prices, the yearly first and then
-  the monthly, each once (ADR 0042 "Yearly first"; ADR 0039 §7 as amended): "If you
-  would like to keep Garden, it is $24.99 a year, or $2.99 a month." When the catalog
-  has no yearly Garden price on sale, the monthly alone is named.
+- **No price, no plans link** (owner decision 2026-11-19, ADR 0039 §7 as amended):
+  the emails are notices about the trial's dates. They name no price, no first
+  charge and no way to keep Garden, and carry no "See plans" button. Until 0.53.2
+  they named the catalog's Garden prices and the first-charge date.
 - **Contents:** the end date, plants added and care tasks done during the trial (read
   from existing rows), what Seedling holds (read from the plan catalog), and that
   everything already made is kept. A household with no plants is told "You have not
-  added a plant yet." A count that could not be read is omitted, never printed as 0.
+  added a plant yet." A household that had plants before its trial and added none
+  during it is told how many active plants it has instead. A count that could not
+  be read is omitted, never printed as 0.
 - **Rules:** one-click unsubscribe (category `trial_notices`, preference
   `trialNotices`), quiet hours, bounce and complaint suppression, once per admin.
   A household with Stripe state or a running gift gets nothing.
@@ -1106,8 +1107,13 @@ All three answer 404 while the switch is off.
 **Verification.** `services/appStoreJws.ts` checks the `x5c` chain against the
 pinned Apple Root CA - G3, Apple's two marker extensions, validity at
 `signedDate`, and the ES256 signature, with `node:crypto` only. Bundle id
-`net.familygreenhouse.app`; production notifications must name app 6812185914. Production and Sandbox are accepted (App Review buys in Sandbox);
-`APP_STORE_ENVIRONMENTS` narrows it.
+`net.familygreenhouse.app`; production notifications must name app 6812185914. Only Production transactions grant a plan unless the
+deployment opts in to Sandbox (ADR 0045): `app_store_environments` in the
+environment's tfvars sets `APP_STORE_ENVIRONMENTS` on the billing Lambda.
+Staging is `"Production,Sandbox"`. Production is `"Production"`, and is set to
+`"Production,Sandbox"` only from the owner's TestFlight purchase check until
+Apple approves a build, then set back. A refused transaction is logged as
+`app_store_environment_refused` and changes nothing.
 
 **Not paying twice.** The purchase intent refuses a household with a live
 Stripe subscription, an active App Store subscription, or a lifetime or gift

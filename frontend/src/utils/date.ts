@@ -1,3 +1,5 @@
+import i18n from '@/i18n';
+
 /**
  * Calendar-day difference `to - from`, immune to DST. Subtracting local
  * midnights gives 23h/25h days across DST transitions, and Math.ceil over
@@ -39,7 +41,7 @@ export function firstDueIso(now: Date = new Date()): string {
 }
 
 export function formatDate(dateString: string | null | undefined): string {
-  if (!dateString) return 'Never';
+  if (!dateString) return i18n.t('common.never');
 
   const date = new Date(dateString);
   return date.toLocaleDateString(undefined, {
@@ -148,13 +150,13 @@ export function formatDueDate(dateString: string): string {
   date.setHours(0, 0, 0, 0);
 
   if (date.getTime() < today.getTime()) {
-    return 'Overdue';
+    return i18n.t('tasks.overdue');
   }
   if (date.getTime() === today.getTime()) {
-    return 'Today';
+    return i18n.t('common.today');
   }
   if (date.getTime() === tomorrow.getTime()) {
-    return 'Tomorrow';
+    return i18n.t('common.tomorrow');
   }
   return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }

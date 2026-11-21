@@ -342,22 +342,34 @@ describe('CARE_GUIDES content dates', () => {
     // their links to the other holiday guides on 2026-11-04, a copy edit.
     const drifted = CARE_GUIDES.filter((g) => g.updated !== g.reviewed);
     // Seven guides got new search titles or descriptions on 2026-11-06, a copy
-    // edit with no new facts, so they drift too.
+    // edit with no new facts, so they drift too. So do two holiday guides
+    // that got a "how often to water" heading on 2026-11-15 (and amaryllis a
+    // new description from its own cited text).
+    // Five more gained a winter-watering question on 2026-11-17, restating
+    // their own cited text (holidayWording.test.tsx); haworthia, already
+    // here, gained one too.
     expect(drifted.map((g) => g.slug).sort()).toEqual([
+      'amaryllis',
       'begonia',
       'bird-of-paradise',
       'blue-echeveria',
+      'boston-fern',
       'burros-tail',
       'christmas-cactus',
+      'cyclamen',
       'english-ivy',
       'haworthia',
       'heartleaf-philodendron',
+      'hoya',
+      'jade-plant',
       'lily',
       'money-tree',
       'monstera',
       'nerve-plant',
       'poinsettia',
+      'ponytail-palm',
       'rubber-plant',
+      'snake-plant',
     ]);
   });
 });
@@ -550,7 +562,8 @@ describe('third-batch pet-safety guides', () => {
       expect(g.metaDescription.length, g.slug).toBeLessThan(155);
       expect(g.reviewed, g.slug).toBe('2026-10-22');
       // The sources block (careSources) was added to each on 2026-11-03.
-      expect(g.updated, g.slug).toBe('2026-11-03');
+      // Haworthia also gained a winter-watering question on 2026-11-17.
+      expect(g.updated, g.slug).toBe(g.slug === 'haworthia' ? '2026-11-17' : '2026-11-03');
     }
     const titles = CARE_GUIDES.map((g) => g.metaTitle);
     const descriptions = CARE_GUIDES.map((g) => g.metaDescription);
@@ -875,16 +888,37 @@ describe('holiday guides', () => {
       (t) => (SOURCED_INTERVALS[g.slug] ?? []).reduce((s, ok) => s.split(ok).join(''), t)
     );
 
-  it('publishes all four, reviewed and updated on the day the sources were read', () => {
+  /**
+   * Search Console, 28 days to 2026-11-14: real US "how often to water"
+   * queries for amaryllis and cyclamen already land at positions 4 to 10, so
+   * on 2026-11-15 each got that question as its H1, and amaryllis a description
+   * with Clemson's interval. A copy edit, so `updated` moved and `reviewed`
+   * did not. Norfolk Island pine kept its heading: the longer one pushed the
+   * sign-up link below the iPhone SE Safari fold (care-cta-above-fold.spec.ts).
+   * Kalanchoe is unchanged.
+   */
+  const HEADED: Partial<Record<(typeof HOLIDAY)[number], string>> = {
+    amaryllis: 'Amaryllis care: how often to water it',
+    cyclamen: 'Cyclamen care: how often to water it',
+  };
+
+  it('publishes all four, reviewed on the day the sources were read', () => {
     for (const [i, slug] of HOLIDAY.entries()) {
       const g = guides[i];
       expect(g, slug).toBeDefined();
       expect(g!.reviewed, slug).toBe('2026-11-04');
-      expect(g!.updated, slug).toBe('2026-11-04');
+      expect(g!.updated, slug).toBe(HEADED[slug] ? '2026-11-15' : '2026-11-04');
       expect(g!.careSources.length, slug).toBeGreaterThanOrEqual(2);
       for (const s of g!.careSources) expect(s.accessed, `${slug}: ${s.url}`).toBe('2026-11-04');
-      expect(g!.heading, slug).toBeUndefined();
+      expect(g!.heading, slug).toBe(HEADED[slug]);
     }
+  });
+
+  it('gives the amaryllis description Clemson’s interval for a blooming bulb', () => {
+    const d = findCareGuide('amaryllis')!.metaDescription;
+    expect(d).toMatch(/^Water an amaryllis when the soil surface is dry\./);
+    expect(d).toContain('about once or twice a week');
+    expect(d.length).toBeLessThanOrEqual(155);
   });
 
   it('answers "how often to water" first, in the title and the first FAQ', () => {
@@ -1067,7 +1101,9 @@ describe('guides batch 4 (2026-11-05)', () => {
       const g = guides[i];
       expect(g, slug).toBeDefined();
       expect(g!.reviewed, slug).toBe('2026-11-05');
-      expect(g!.updated, slug).toBe('2026-11-05');
+      // The ponytail palm gained a winter-watering question on 2026-11-17, a
+      // copy edit from its own cited text with no new source reading.
+      expect(g!.updated, slug).toBe(slug === 'ponytail-palm' ? '2026-11-17' : '2026-11-05');
       expect(g!.careSources.length, slug).toBeGreaterThanOrEqual(1);
       for (const s of g!.careSources) expect(s.accessed, `${slug}: ${s.url}`).toBe('2026-11-05');
       expect(g!.heading, slug).toBeUndefined();

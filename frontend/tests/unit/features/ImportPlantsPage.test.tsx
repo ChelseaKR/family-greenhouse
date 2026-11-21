@@ -121,6 +121,13 @@ describe('ImportPlantsPage', () => {
     expect(screen.queryByText('Skipped rows')).not.toBeInTheDocument();
   });
 
+  it('titles the page with a level-one heading', () => {
+    // The title is a card header, which is an h2 by default: the page had no
+    // h1 at all.
+    renderPage();
+    expect(screen.getByRole('heading', { level: 1, name: 'Import plants' })).toBeInTheDocument();
+  });
+
   it('says plainly that Planta, Greg and Vera have no export to import from', () => {
     renderPage();
     const note = screen.getByTestId('other-apps-note');

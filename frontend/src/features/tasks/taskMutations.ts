@@ -319,7 +319,9 @@ export function useCompleteTaskMutation(householdId: string | null) {
       void refreshCareHistory(queryClient, householdId, updatedTask);
       playHaptic('completed');
       noteCareDoneInBackground();
-      toast.success(variables.confirmDuplicate ? t('doubleCare.loggedAnyway') : 'Task completed');
+      toast.success(
+        variables.confirmDuplicate ? t('doubleCare.loggedAnyway') : t('tasks.completedToast')
+      );
     },
     onError: (err, variables, context) => {
       context?.previousTasks.forEach(([key, value]) => queryClient.setQueryData(key, value));

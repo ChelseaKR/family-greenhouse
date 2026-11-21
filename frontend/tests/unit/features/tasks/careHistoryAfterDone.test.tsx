@@ -184,10 +184,12 @@ describe('the plant page after Done', () => {
     );
     expect(screen.getByTestId('last-watered')).toBe(lastWatered);
     expect(screen.queryByText('No care history yet.')).not.toBeInTheDocument();
-    // The Care History row: "<name> completed <task>", split across spans.
+    // The Care History row: "<name> completed <task>", split across spans, with
+    // the type named as an activity ("watering"), not its stored value.
     expect(
       screen.getByText(
-        (_text, element) => element?.tagName === 'P' && element.textContent === 'Me completed water'
+        (_text, element) =>
+          element?.tagName === 'P' && element.textContent === 'Me completed watering'
       )
     ).toBeInTheDocument();
   });

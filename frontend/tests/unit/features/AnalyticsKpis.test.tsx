@@ -175,6 +175,19 @@ describe('analytics KPI tiles', () => {
     expect(screen.getByRole('img', { name: /30-day completion trend/i })).toBeInTheDocument();
   });
 
+  it("gives a screen reader each day's count, not only the month's total (WCAG 1.1.1)", async () => {
+    const series = [
+      { date: '2026-11-01', count: 0 },
+      { date: '2026-11-02', count: 3 },
+    ];
+    const { container } = renderAnalytics({ failing: false, overrides: { daily: { series } } });
+    await settled(container);
+
+    // The per-day count was only in a hover tooltip (a title attribute).
+    expect(screen.getByText('2026-11-02: 3 tasks')).toBeInTheDocument();
+    expect(screen.getByText('2026-11-01: 0 tasks')).toBeInTheDocument();
+  });
+
   it('still earns the amber warning tone for a real overdue task', async () => {
     // Positive control for the tone rule: the fix must not have made the
     // tile incapable of warning. One genuinely overdue task → "1" in amber.
@@ -408,7 +421,7 @@ describe('analytics history window (ADR 0014)', () => {
     expect(screen.getByText(/Nothing older is deleted/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'See plans' })).toHaveAttribute(
       'href',
-      '/settings/billing'
+      '/settings/billing#change-plan'
     );
   });
 
@@ -476,7 +489,7 @@ describe('the free plan’s history-window note', () => {
     expect(await screen.findByText(NOTE)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'See plans' })).toHaveAttribute(
       'href',
-      '/settings/billing'
+      '/settings/billing#change-plan'
     );
   });
 

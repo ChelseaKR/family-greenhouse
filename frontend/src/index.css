@@ -281,13 +281,64 @@ html[data-text-size='large'] .whitespace-nowrap {
   }
 
   /* Skip link for keyboard navigation */
+  /* z-[100], not z-50: the desktop sidebar (lg:z-50) and the sticky public
+     header are positioned and come later in the document, so at an equal
+     z-index they painted over the focused link. It took focus and could not
+     be seen (WCAG 2.4.7, 2.4.11). */
   .skip-link {
-    @apply sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary-600 focus:text-white focus:rounded-md;
+    @apply sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary-600 focus:text-white focus:rounded-md;
   }
 
   /* Focus visible styles */
   :focus-visible {
     @apply outline-hidden ring-2 ring-primary-500 ring-offset-2;
+  }
+
+  /* A native checkbox or radio gets a real outline as well. The ring above is
+     a box-shadow, and WebKit does not paint a box-shadow on a control it
+     draws itself (appearance: auto); `outline-hidden` had already taken the
+     browser's own ring away. In Safari, and in the iPhone app with a
+     keyboard, a focused checkbox showed nothing at all (WCAG 2.4.7). The
+     outline sits where the ring does, so Chromium and Firefox look as they
+     did. Pinned by tests/unit/styles/checkboxFocusOutline.test.ts. */
+  input[type='checkbox']:focus-visible,
+  input[type='radio']:focus-visible {
+    outline: 2px solid var(--color-primary-500);
+    outline-offset: 2px;
+  }
+
+  /* Forced colors (Windows High Contrast) replaces every background the page
+     sets with the system's. Which view is selected, which filter is pressed,
+     which settings tab is open and which page the sidebar is on were all
+     shown by a background tint alone, so in that mode each of them looked
+     exactly like its neighbours (WCAG 1.4.1, 1.4.11). The selected one now
+     takes the system's own selection colours. `!important` because these
+     must beat the utility classes, which sit in a later layer. Pinned by
+     tests/unit/styles/forcedColorsSelectedState.test.ts. */
+  @media (forced-colors: active) {
+    [aria-pressed='true'],
+    [aria-current='page'],
+    [role='tab'][aria-selected='true'] {
+      forced-color-adjust: none !important;
+      background-color: Highlight !important;
+      border-color: Highlight !important;
+      color: HighlightText !important;
+    }
+
+    [aria-pressed='true'] *,
+    [aria-current='page'] *,
+    [role='tab'][aria-selected='true'] * {
+      background-color: transparent !important;
+      color: HighlightText !important;
+    }
+
+    /* A filled button is a button because of its fill, which this mode
+       removes. The shared Button adds its own border (buttonStyles.ts);
+       these two classes are the same thing written as CSS. */
+    .btn-primary,
+    .btn-danger {
+      border: 1px solid ButtonBorder !important;
+    }
   }
 
   /* Reduced motion preference */
@@ -506,12 +557,20 @@ html[data-text-size='large'] .whitespace-nowrap {
 
   .input {
     /* text-base at mobile keeps iOS from auto-zooming on focus (<16px does);
-       brand-tinted border replaces the stock gray. */
-    @apply block w-full bg-white/80 px-3 py-2 border border-primary-200 rounded-lg shadow-xs placeholder-gray-500 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 text-base sm:text-sm;
+       brand-tinted border replaces the stock gray.
+
+       border-primary-500, not -200: the border is the only thing that shows
+       where a field is (its fill is the page colour), and primary-200 on
+       white is 1.5:1. WCAG 1.4.11 asks 3:1 of the boundary of a control;
+       primary-500 is 3.4:1 on white and 3.2:1 on paper. Pinned by
+       tests/unit/styles/inputBorderContrast.test.ts. */
+    @apply block w-full bg-white/80 px-3 py-2 border border-primary-500 rounded-lg shadow-xs placeholder-gray-500 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 text-base sm:text-sm;
   }
 
+  /* red-600, not -300: a field in error must not be fainter than one that is
+     fine (red-300 on white is 1.9:1). */
   .input-error {
-    @apply border-red-300 focus:ring-red-500 focus:border-red-500;
+    @apply border-red-600 focus:ring-red-500 focus:border-red-500;
   }
 
   .label {

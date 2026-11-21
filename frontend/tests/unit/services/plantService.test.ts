@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { plantService } from '@/services/plantService';
 import { track } from '@/services/analytics';
@@ -182,5 +182,46 @@ describe('plantService', () => {
     await plantService.importPlants([{ name: 'Fern' }, { name: 'Pothos' }]);
 
     expect(track).toHaveBeenCalledWith('plants_imported', { context: '1' });
+  });
+  describe('identifyPlant and identification packs (ADR 0044)', () => {
+    let sent: unknown;
+    beforeEach(() => {
+      sent = undefined;
+      server.use(
+        http.post(`${API}/plants/identify`, async ({ request }) => {
+          sent = await request.json();
+          return HttpResponse.json({ configured: true, suggestions: [] });
+        })
+      );
+    });
+
+    afterEach(() => {
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+    });
+
+    function inShell(platform: 'ios' | 'android') {
+      // The global the Capacitor bridge injects (lib/platform.ts reads it).
+      (window as unknown as { Capacitor?: unknown }).Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => platform,
+      };
+    }
+
+    it('the iPhone app asks the server not to spend a pack bought on the website', async () => {
+      inShell('ios');
+      await plantService.identifyPlant('data:image/jpeg;base64,AAAA');
+      expect(sent).toEqual({ image: 'data:image/jpeg;base64,AAAA', useTopUpCredits: false });
+    });
+
+    it('the website sends only the image, so its packs keep working', async () => {
+      await plantService.identifyPlant('data:image/jpeg;base64,AAAA');
+      expect(sent).toEqual({ image: 'data:image/jpeg;base64,AAAA' });
+    });
+
+    it('the Android app is unchanged by this decision', async () => {
+      inShell('android');
+      await plantService.identifyPlant('data:image/jpeg;base64,AAAA');
+      expect(sent).toEqual({ image: 'data:image/jpeg;base64,AAAA' });
+    });
   });
 });

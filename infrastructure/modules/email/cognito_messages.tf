@@ -23,7 +23,8 @@ data "archive_file" "cognito_messages" {
 resource "aws_iam_role" "cognito_messages" {
   provider = aws.iam
 
-  name = "${var.project_name}-cognito-messages-${var.environment}"
+  name                 = "${var.project_name}-cognito-messages-${var.environment}"
+  permissions_boundary = var.permissions_boundary_arn == "" ? null : var.permissions_boundary_arn
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{

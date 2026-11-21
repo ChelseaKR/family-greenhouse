@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, Transition } from '@headlessui/react';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { Button } from './Button';
@@ -25,10 +26,12 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  cancelLabel: cancelLabelProp,
   variant = 'danger',
   isLoading = false,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation();
+  const cancelLabel = cancelLabelProp ?? t('common.cancel');
   // Initial focus goes to Cancel, never to the confirm button. The confirm
   // button is FIRST in DOM order (the wrapper reverses it visually on wide
   // screens), so Headless UI's default — first tabbable element in the panel —

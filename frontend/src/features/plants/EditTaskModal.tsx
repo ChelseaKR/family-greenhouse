@@ -148,7 +148,7 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
                     className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-md bg-paper text-gray-600 hover:text-gray-800 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
                     onClick={handleClose}
                   >
-                    <span className="sr-only">Close</span>
+                    <span className="sr-only">{t('common.close')}</span>
                     <XMarkIcon className="h-6 w-6" aria-hidden="true" />
                   </button>
                 </div>
@@ -157,7 +157,7 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
                   as="h3"
                   className="mb-4 pr-12 font-serif text-2xl tracking-tight text-ink"
                 >
-                  Edit task
+                  {t('tasks.modal.editTitle')}
                 </Dialog.Title>
 
                 {mutation.isError && (
@@ -169,20 +169,20 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
                   <div>
                     <label htmlFor="task-type" className="label">
-                      Type
+                      {t('tasks.modal.type')}
                     </label>
                     <select id="task-type" className="input" {...register('type')}>
-                      <option value="water">Water</option>
-                      <option value="fertilize">Fertilize</option>
-                      <option value="prune">Prune</option>
-                      <option value="repot">Repot</option>
-                      <option value="custom">Custom</option>
+                      <option value="water">{t('tasks.types.water')}</option>
+                      <option value="fertilize">{t('tasks.types.fertilize')}</option>
+                      <option value="prune">{t('tasks.types.prune')}</option>
+                      <option value="repot">{t('tasks.types.repot')}</option>
+                      <option value="custom">{t('tasks.types.custom')}</option>
                     </select>
                   </div>
 
                   {watchType === 'custom' && (
                     <Input
-                      label="Custom name"
+                      label={t('tasks.modal.customName')}
                       error={errors.customType?.message}
                       {...register('customType')}
                     />
@@ -199,7 +199,7 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
                     increaseLabel={t('tasks.frequencyStepper.more')}
                   >
                     <Input
-                      label="Frequency (days)"
+                      label={t('tasks.modal.frequencyDays')}
                       type="number"
                       inputMode="numeric"
                       min={1}
@@ -235,17 +235,17 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
 
                   <div>
                     <label htmlFor="notes" className="label">
-                      Notes
+                      {t('plants.notesLabel')}
                     </label>
                     <textarea id="notes" rows={3} className="input" {...register('notes')} />
                   </div>
 
                   <div className="flex justify-end gap-3 pt-4">
                     <Button type="button" variant="secondary" onClick={handleClose}>
-                      Cancel
+                      {t('common.cancel')}
                     </Button>
                     <Button type="submit" isLoading={mutation.isPending}>
-                      Save changes
+                      {t('householdChannel.save')}
                     </Button>
                   </div>
                 </form>

@@ -117,8 +117,8 @@ export function KioskPage() {
   const { t } = useTranslation();
 
   useMetaTags({
-    title: 'Plant care today — Family Greenhouse',
-    description: 'A household wall display of the plant care due today.',
+    title: t('kiosk.metaTitle'),
+    description: t('kiosk.metaDescription'),
   });
 
   const [tasks, setTasks] = useState<KioskTask[] | null>(null);
@@ -279,9 +279,11 @@ export function KioskPage() {
                           )}
                           {labelKey && (
                             <p
+                              // white/70, not 60: on the card's tint 60% was
+                              // 4.1:1 (WCAG 1.4.3); 70% is 5.0:1.
                               className={
                                 'mt-1 text-xl ' +
-                                (days !== null && days < 0 ? 'text-amber-200' : 'text-white/60')
+                                (days !== null && days < 0 ? 'text-amber-200' : 'text-white/70')
                               }
                             >
                               {t(labelKey)}

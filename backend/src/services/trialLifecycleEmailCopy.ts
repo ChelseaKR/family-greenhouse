@@ -10,25 +10,32 @@
  *
  * ## Rules this copy keeps (and `trialLifecycleEmailCopy.test.ts` pins)
  *
- *   - **No urgency, no incentive.** No countdown language beyond the plain
- *     date, no "last chance", no "hurry", no discount, no code. The only
- *     prices named are the plan catalog's Garden prices, the yearly first and
- *     then the monthly (ADR 0042, "Yearly first"), each named once. When the
- *     catalog has no yearly Garden price, the monthly alone is named, once.
+ *   - **A notice, not an offer** (owner decision 2026-11-19, ADR 0039 §7 as
+ *     amended). The emails say when the trial ends, that nothing is charged,
+ *     what changes and that nothing is deleted. They name no price, carry no
+ *     plans link or button and no line about keeping Garden. No countdown
+ *     language beyond the plain date, no "last chance", no "hurry", no
+ *     discount, no code.
  *   - **Caps, not deletions.** It says what stops being available and that
  *     everything already made is kept. Every figure comes from the plan
  *     catalog (`models/plans.ts`), never a literal.
  *   - **Absence is never an achievement.** A household that added no plant is
  *     told "You have not added a plant yet." A count that could not be read is
  *     left out and the email says so; it is never written as 0.
+ *   - **Counted in the window, said truthfully.** The counts cover the trial
+ *     window only. A household that had plants before its trial and added
+ *     none during it is told how many it has now, not that it has none, and a
+ *     task count of 0 is said as "during the trial", never "yet".
+ *   - **No plant, first things first.** On day 10, a household whose plant
+ *     count read as 0 gets "Add your first plant" and its button first
+ *     (owner decision C1, 2026-11-05).
  *   - **Only existing data.** Plants added, care tasks done. Nothing that
  *     needed new tracking. (Reminders delivered is excluded on purpose; see
  *     `trialLifecycleFacts.ts`.)
  *   - **Escaping** is `renderEmail`'s: every interpolated value, including the
  *     recipient's name, goes through `escapeHtml` there.
  */
-import { CHECKOUT_TRIAL_END_MIN_LEAD_MS } from '../models/checkoutTrial.js';
-import { PLANS, isIntervalWithdrawn } from '../models/plans.js';
+import { PLANS } from '../models/plans.js';
 import { t, formatCount, type EmailLocale } from './email/catalog.js';
 import { appUrl, settingsUrl } from './email/links.js';
 import { renderEmail, type EmailBlock } from './email/template.js';
@@ -77,6 +84,9 @@ interface Phrases {
   d10Intro: string;
   d10ChangesHeading: string;
   d10ChangesLead: string;
+  /** Day 10, a household that has added no plant: the first thing it reads. */
+  d10FirstPlant: string;
+  d10FirstPlantCta: string;
   d14Subject: string;
   d14Title: string;
   d14Preheader: string;
@@ -88,6 +98,8 @@ interface Phrases {
   greetingGeneric: string;
   factsHeading: string;
   plantsAdded: Plural;
+  /** Nothing added in the window, but the household has plants now. */
+  plantsNow: Plural;
   plantsNone: string;
   tasksDone: Plural;
   tasksNone: string;
@@ -97,17 +109,6 @@ interface Phrases {
   limitTools: string;
   overPlants: string;
   overMembers: string;
-  /** The `{{prices}}` clause: the yearly Garden price, then the monthly. */
-  pricesYearlyAndMonthly: string;
-  /** The `{{prices}}` clause when the catalog sells Garden monthly only. */
-  pricesMonthlyOnly: string;
-  /** Day 10, while a checkout can still defer the first charge to `{{date}}`. */
-  keepGardenUntil: string;
-  /** Day 10 sent too late for that (inside Stripe's minimum), and day 14. */
-  keepGardenNow: string;
-  gardenBack: string;
-  nothingToDo: string;
-  cta: string;
   reply: string;
   reasonDay10: string;
   reasonDay14: string;
@@ -128,6 +129,9 @@ const PHRASES: Record<EmailLocale, Phrases> = {
       'Your household’s free Garden trial ends on {{date}}. We never asked for a card, so nothing will be charged. On that day your household moves to Seedling, the free plan, on its own.',
     d10ChangesHeading: 'What changes on {{date}}',
     d10ChangesLead: 'Everything you have made stays. What changes is what you can add:',
+    d10FirstPlant:
+      'You have not added a plant yet. Add your first plant and say how often it needs water, and Family Greenhouse can remind you when it is due.',
+    d10FirstPlantCta: 'Add your first plant',
     d14Subject: 'You are back on Seedling, and nothing was deleted',
     d14Title: 'Your Garden trial has ended',
     d14Preheader: 'Everything you added is still here, and nothing was charged.',
@@ -141,12 +145,16 @@ const PHRASES: Record<EmailLocale, Phrases> = {
     greetingGeneric: 'Hi there,',
     factsHeading: 'What your household did during the trial',
     plantsAdded: { one: 'You added {{count}} plant.', other: 'You added {{count}} plants.' },
+    plantsNow: {
+      one: 'Your household has {{count}} active plant.',
+      other: 'Your household has {{count}} active plants.',
+    },
     plantsNone: 'You have not added a plant yet.',
     tasksDone: {
       one: 'Your household marked {{count}} care task done.',
       other: 'Your household marked {{count}} care tasks done.',
     },
-    tasksNone: 'No care task has been marked done yet.',
+    tasksNone: 'No care task has been marked done during the trial.',
     factsUnavailable:
       'We could not load your household’s counts for this email, so none are shown. That does not mean there is nothing to count.',
     limitPlants:
@@ -159,16 +167,6 @@ const PHRASES: Record<EmailLocale, Phrases> = {
       'You have {{count}} active plants, more than Seedling’s {{limit}}. They all stay. Adding another is paused until you have fewer than {{limit}}.',
     overMembers:
       'Your household has {{count}} people, more than Seedling’s {{limit}}. They all stay. New people cannot join until there is room.',
-    pricesYearlyAndMonthly: '{{yearly}} a year, or {{monthly}} a month',
-    pricesMonthlyOnly: '{{monthly}} a month',
-    keepGardenUntil:
-      'If you would like to keep Garden, it is {{prices}}. If you start it before {{cutoff}}, you add a card then, and your first charge would be on {{date}}, the day the trial ends. If you start it closer to {{date}}, the first charge is the day you start it. You can start it in Settings → Plan status.',
-    keepGardenNow:
-      'If you would like to keep Garden, it is {{prices}}, and the first charge is the day you start it. You can start it in Settings → Plan status.',
-    gardenBack:
-      'If you would like Garden back, it is {{prices}}, and the first charge is the day you start it. You can start it any time in Settings → Plan status.',
-    nothingToDo: 'If you would rather stay on Seedling, there is nothing you need to do.',
-    cta: 'See plans in Settings',
     reply: 'Questions? Reply to this email and a person will read it.',
     reasonDay10:
       'You are getting this because your household started a free Garden trial on Family Greenhouse. We send two emails about it: this one, and one when it ends.',
@@ -189,6 +187,9 @@ const PHRASES: Record<EmailLocale, Phrases> = {
       'La prueba gratuita de Garden de tu hogar termina el {{date}}. Nunca pedimos una tarjeta, así que no se cobrará nada. Ese día tu hogar pasa a Seedling, el plan gratuito, de forma automática.',
     d10ChangesHeading: 'Qué cambia el {{date}}',
     d10ChangesLead: 'Todo lo que has creado se queda. Lo que cambia es lo que puedes añadir:',
+    d10FirstPlant:
+      'Todavía no has añadido ninguna planta. Añade tu primera planta e indica cada cuánto necesita agua, y Family Greenhouse puede avisarte cuando toque regarla.',
+    d10FirstPlantCta: 'Añadir tu primera planta',
     d14Subject: 'Has vuelto a Seedling y no se borró nada',
     d14Title: 'Terminó tu prueba de Garden',
     d14Preheader: 'Todo lo que añadiste sigue aquí y no se cobró nada.',
@@ -202,12 +203,16 @@ const PHRASES: Record<EmailLocale, Phrases> = {
     greetingGeneric: 'Hola:',
     factsHeading: 'Lo que hizo tu hogar durante la prueba',
     plantsAdded: { one: 'Añadiste {{count}} planta.', other: 'Añadiste {{count}} plantas.' },
+    plantsNow: {
+      one: 'Tu hogar tiene {{count}} planta activa.',
+      other: 'Tu hogar tiene {{count}} plantas activas.',
+    },
     plantsNone: 'Todavía no has añadido ninguna planta.',
     tasksDone: {
       one: 'Tu hogar marcó {{count}} tarea de cuidado como hecha.',
       other: 'Tu hogar marcó {{count}} tareas de cuidado como hechas.',
     },
-    tasksNone: 'Todavía no se ha marcado ninguna tarea de cuidado como hecha.',
+    tasksNone: 'No se ha marcado ninguna tarea de cuidado como hecha durante la prueba.',
     factsUnavailable:
       'No pudimos cargar los recuentos de tu hogar para este correo, así que no se muestran. Eso no significa que no haya nada que contar.',
     limitPlants:
@@ -220,16 +225,6 @@ const PHRASES: Record<EmailLocale, Phrases> = {
       'Tienes {{count}} plantas activas, más que las {{limit}} de Seedling. Todas se quedan. No podrás añadir otra hasta tener menos de {{limit}}.',
     overMembers:
       'Tu hogar tiene {{count}} personas, más que las {{limit}} de Seedling. Todas se quedan. Las personas nuevas no pueden unirse hasta que haya sitio.',
-    pricesYearlyAndMonthly: '{{yearly}} al año o {{monthly}} al mes',
-    pricesMonthlyOnly: '{{monthly}} al mes',
-    keepGardenUntil:
-      'Si quieres conservar Garden, cuesta {{prices}}. Si lo empiezas antes del {{cutoff}}, añades una tarjeta en ese momento y el primer cobro sería el {{date}}, el día en que termina la prueba. Si lo empiezas más cerca del {{date}}, el primer cobro es el día en que lo empiezas. Puedes empezarlo en Ajustes → Estado del plan.',
-    keepGardenNow:
-      'Si quieres conservar Garden, cuesta {{prices}}, y el primer cobro es el día en que lo empiezas. Puedes empezarlo en Ajustes → Estado del plan.',
-    gardenBack:
-      'Si quieres recuperar Garden, cuesta {{prices}}, y el primer cobro es el día en que lo empiezas. Puedes empezarlo cuando quieras en Ajustes → Estado del plan.',
-    nothingToDo: 'Si prefieres quedarte en Seedling, no tienes que hacer nada.',
-    cta: 'Ver los planes en Ajustes',
     reply: '¿Preguntas? Responde a este correo y lo leerá una persona.',
     reasonDay10:
       'Recibes esto porque tu hogar empezó una prueba gratuita de Garden en Family Greenhouse. Enviamos dos correos sobre ella: este y otro cuando termine.',
@@ -274,24 +269,43 @@ function countOf(read: CountRead): number | null {
 }
 
 /**
+ * Day 10 leads with "Add your first plant" only for a household that READ as
+ * having added none. An unreadable count is not "none" (ADR 0010), and a
+ * household the counter says has plants right now is not shown it either.
+ */
+export function leadsWithFirstPlant(ctx: TrialEmailContext): boolean {
+  if (ctx.kind !== 'trial_day10') return false;
+  if (countOf(ctx.facts.plantsAdded) !== 0) return false;
+  const now = countOf(ctx.facts.plantsNow);
+  return now === null || now === 0;
+}
+
+/**
  * The facts section. Returns an empty list only when there is nothing honest
  * to say; a household with no plants gets the plain sentence for that, and a
  * failed read gets a sentence saying so.
+ *
+ * Plants added are counted inside the trial window only. A household that
+ * had plants before its trial began and added none during it is told how
+ * many it has now (`plantsNow`), never "You have not added a plant yet."
  */
 function factBlocks(ctx: TrialEmailContext, p: Phrases): EmailBlock[] {
   const { locale, facts } = ctx;
   const plants = countOf(facts.plantsAdded);
+  const plantsNow = countOf(facts.plantsNow);
   const tasks = countOf(facts.tasksCompleted);
   const lines: string[] = [];
   let unreadable = false;
+  const hadPlantsBefore = plants === 0 && plantsNow !== null && plantsNow > 0;
 
   if (plants === null) unreadable = true;
+  else if (hadPlantsBefore) lines.push(plural(locale, p.plantsNow, plantsNow));
   else if (plants === 0) lines.push(p.plantsNone);
   else lines.push(plural(locale, p.plantsAdded, plants));
 
-  // Tasks only mean something once there are plants. With none added, the
-  // plain "not added a plant yet" line stands alone.
-  if (plants !== 0) {
+  // Tasks only mean something once there are plants. With none, the plain
+  // "not added a plant yet" line stands alone.
+  if (plants !== 0 || hadPlantsBefore) {
     if (tasks === null) unreadable = true;
     else if (tasks === 0) lines.push(p.tasksNone);
     else lines.push(plural(locale, p.tasksDone, tasks));
@@ -348,53 +362,10 @@ function limitBlocks(ctx: TrialEmailContext, p: Phrases, withOver: boolean): Ema
   return blocks;
 }
 
-/**
- * The Garden prices as the email states them: the yearly first, then the
- * monthly (ADR 0042, "Yearly first"), both read from the plan catalog. A
- * catalog with no yearly Garden price, or one that has withdrawn it from sale
- * (as ADR 0012 once did), names the monthly alone rather than printing a
- * blank, a zero, or a price checkout would refuse.
- */
-function gardenPrices(locale: EmailLocale, p: Phrases): string {
-  const money = (amount: number) =>
-    new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(amount);
-  const monthly = money(PLANS.garden.monthlyPrice);
-  const annual = PLANS.garden.annualPrice;
-  const yearlyOnSale =
-    typeof annual === 'number' && annual > 0 && !isIntervalWithdrawn(PLANS.garden, 'year');
-  if (yearlyOnSale) {
-    return fill(p.pricesYearlyAndMonthly, { yearly: money(annual), monthly });
-  }
-  return fill(p.pricesMonthlyOnly, { monthly });
-}
-
-/**
- * The one sentence that names the prices, and the first charge it would bring.
- *
- * No stacked trials (owner decision, 2026-10-23): a household that starts
- * Garden during its no-card trial is first charged when that trial ends, not
- * 14 days after checkout, and one that starts it after the trial is charged
- * that day. The cutoff is the last moment a checkout can still defer the
- * charge (`CHECKOUT_TRIAL_END_MIN_LEAD_MS` before the end, the rule
- * `checkoutTrialFor` applies). It is printed as a calendar date and the copy
- * says "before" it, so a reader in any zone who acts before that date is
- * inside the window.
- */
-function keepGardenLine(ctx: TrialEmailContext, p: Phrases, prices: string, date: string): string {
-  if (ctx.kind === 'trial_day14') return fill(p.gardenBack, { prices });
-  const cutoffMs = Date.parse(ctx.endsAt) - CHECKOUT_TRIAL_END_MIN_LEAD_MS;
-  if (!Number.isFinite(cutoffMs) || ctx.now.getTime() >= cutoffMs) {
-    return fill(p.keepGardenNow, { prices });
-  }
-  const cutoff = formatEndDate(ctx.locale, new Date(cutoffMs).toISOString(), ctx.timeZone);
-  return fill(p.keepGardenUntil, { prices, date, cutoff });
-}
-
 export function composeTrialLifecycleEmail(ctx: TrialEmailContext): ComposedTrialEmail {
   const { kind, locale } = ctx;
   const p = PHRASES[locale];
   const date = formatEndDate(locale, ctx.endsAt, ctx.timeZone);
-  const prices = gardenPrices(locale, p);
   const name = ctx.recipientName?.trim();
   const greeting = name ? fill(p.greeting, { name }) : p.greetingGeneric;
 
@@ -411,7 +382,14 @@ export function composeTrialLifecycleEmail(ctx: TrialEmailContext): ComposedTria
     preheader = fill(p.d10Preheader, { date });
     reason = p.reasonDay10;
     blocks.push({ kind: 'text', text: fill(p.d10Intro, { date }) });
-    blocks.push(...factBlocks(ctx, p));
+    if (leadsWithFirstPlant(ctx)) {
+      // The add-a-plant line replaces the facts section: with no plant there
+      // is nothing else to count.
+      blocks.push({ kind: 'text', text: p.d10FirstPlant });
+      blocks.push({ kind: 'button', label: p.d10FirstPlantCta, href: appUrl('/plants/new') });
+    } else {
+      blocks.push(...factBlocks(ctx, p));
+    }
     blocks.push({ kind: 'heading', text: fill(p.d10ChangesHeading, { date }) });
     blocks.push({ kind: 'text', text: p.d10ChangesLead });
     blocks.push(...limitBlocks(ctx, p, false));
@@ -428,10 +406,9 @@ export function composeTrialLifecycleEmail(ctx: TrialEmailContext): ComposedTria
     blocks.push(...limitBlocks(ctx, p, true));
   }
 
+  // No price, plans line or plans button: these are notices about the
+  // trial's dates, not offers (owner decision 2026-11-19).
   blocks.push({ kind: 'divider' });
-  blocks.push({ kind: 'text', text: keepGardenLine(ctx, p, prices, date) });
-  blocks.push({ kind: 'text', text: p.nothingToDo });
-  blocks.push({ kind: 'button', label: p.cta, href: appUrl('/settings/billing') });
   blocks.push({ kind: 'text', text: p.reply, tone: 'muted' });
 
   const links = [{ label: t(locale, 'footer.manage'), href: settingsUrl() }];

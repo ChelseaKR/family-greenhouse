@@ -59,9 +59,9 @@ const PLANT = {
   recentCompletions: [],
 };
 
-function renderDetail() {
+function renderDetail(plant: typeof PLANT = PLANT) {
   useAuthStore.setState({ accessToken: 'access-1' });
-  server.use(http.get(`${API}/plants/p1`, () => HttpResponse.json(PLANT)));
+  server.use(http.get(`${API}/plants/p1`, () => HttpResponse.json(plant)));
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
@@ -107,15 +107,19 @@ describe('the plant page in Spanish', () => {
     renderDetail();
 
     await screen.findByText(/^Vence: /);
-    expect(valueBeside('Added')).toHaveTextContent(/^Nunca$/);
+    // The label is Spanish now too; it used to be a hardcoded "Added".
+    expect(valueBeside('Añadida')).toHaveTextContent(/^Nunca$/);
+    expect(screen.queryByText('Added')).not.toBeInTheDocument();
     expect(screen.queryByText('Never')).not.toBeInTheDocument();
   });
 
   it('says "Nunca", not "Never", for last care on the care report', () => {
     render(<CareReportCard plant={PLANT as unknown as PlantWithTasks} />);
 
-    const lastCare = valueBeside('Last care');
+    // The label is Spanish now too; it used to be a hardcoded "Last care".
+    const lastCare = valueBeside('Último cuidado');
     expect(within(lastCare).getByText('Nunca')).toBeInTheDocument();
+    expect(screen.queryByText('Last care')).not.toBeInTheDocument();
     expect(screen.queryByText('Never')).not.toBeInTheDocument();
   });
 });
@@ -133,5 +137,50 @@ describe('the plant page in English is unchanged', () => {
     expect(valueBeside('Added')).toHaveTextContent(/^Never$/);
     expect(valueBeside('Last care')).toHaveTextContent(/^Never$/);
     expect(screen.queryByText(/Vence:|Nunca/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The interval beside each task (approved 2026-11-18). The singular form held
+ * the plural sentence, so a task due every day read "Every 1 days", and the
+ * Spanish read "Cada 1 día".
+ */
+describe('the task interval on the plant page', () => {
+  /** The same plant, with its one task due every `frequency` days. */
+  const withFrequency = (frequency: number): typeof PLANT => ({
+    ...PLANT,
+    upcomingTasks: [{ ...PLANT.upcomingTasks[0]!, frequency }],
+  });
+
+  beforeAll(async () => {
+    await ensureLocaleCatalog(i18n, 'es');
+  });
+  afterAll(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  it.each([
+    ['en', 1, 'Every day'],
+    ['en', 2, 'Every 2 days'],
+    ['en', 7, 'Every 7 days'],
+    ['es', 1, 'Cada día'],
+    ['es', 2, 'Cada 2 días'],
+    ['es', 7, 'Cada 7 días'],
+  ] as const)('in %s, a task every %i day(s) reads "%s"', async (language, frequency, text) => {
+    await i18n.changeLanguage(language);
+    renderDetail(withFrequency(frequency));
+
+    expect(await screen.findByText(text, { selector: 'p' })).toBeInTheDocument();
+    // Only the interval line: the Snooze menu's "1 day" / "1 día" option is
+    // correct wording and sits on the same page.
+    expect(screen.queryByText(/\b1 days\b|\b1 día\b/, { selector: 'p' })).not.toBeInTheDocument();
+  });
+
+  it('holds the approved words in both catalogs', async () => {
+    expect(i18n.t('plants.detailPage.everyDays', { lng: 'en', count: 1 })).toBe('Every day');
+    expect(i18n.t('plants.detailPage.everyDays', { lng: 'es', count: 1 })).toBe('Cada día');
+    // The plural forms are unchanged.
+    expect(i18n.t('plants.detailPage.everyDays', { lng: 'en', count: 3 })).toBe('Every 3 days');
+    expect(i18n.t('plants.detailPage.everyDays', { lng: 'es', count: 3 })).toBe('Cada 3 días');
   });
 });

@@ -954,7 +954,11 @@ signed by Xcode, not Apple, so the server refuses them (by design); the local
 store exercises the sheet, Restore purchases, Ask to Buy, refunds and renewals
 on the app side. End-to-end server verification needs Sandbox: a TestFlight
 build, or a Sandbox Apple Account on a device, against an environment with the
-server switch on.
+server switch on and Sandbox accepted. Staging always accepts Sandbox.
+Production accepts it only while `app_store_environments` is
+`"Production,Sandbox"` in its tfvars (ADR 0045); at any other time a Sandbox
+purchase against production is ignored and the app reports that the purchase
+didn't finish.
 
 **Known simulator bug.** On the iOS 26.5 simulator, StoreKit Testing purchases
 can fail with `SKInternalErrorDomain Code=3`. It is Apple's bug, not this

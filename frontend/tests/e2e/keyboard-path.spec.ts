@@ -97,6 +97,16 @@ test.describe('Keyboard-only paths', () => {
     const skipLink = page.getByRole('link', { name: /skip to main content/i });
     await tabTo(page, skipLink, key, 3);
     await expect(skipLink).toBeVisible(); // focus:not-sr-only reveals it
+    // `toBeVisible` passes for a link that something else is painted over.
+    // The desktop sidebar is `lg:z-50` and comes later in the document, so at
+    // z-50 it covered the focused skip link: focus was on a control nobody
+    // could see (WCAG 2.4.7, 2.4.11). Ask what is actually on top.
+    const onTop = await skipLink.evaluate((link) => {
+      const box = link.getBoundingClientRect();
+      const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return top === link || link.contains(top);
+    });
+    expect(onTop, 'the focused skip link must not be covered by the sidebar').toBe(true);
 
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/#main-content/);

@@ -27,6 +27,14 @@ import {
 export interface AuthenticatedUser {
   userId: string;
   email: string;
+  /**
+   * Whether the pool has verified that `email` reaches this person: `true` or
+   * `false` as the token says, and absent when the token does not say (one
+   * issued before the claim was readable, or an API key). Nothing here turns
+   * a request away on it; a route whose effect lands on the mailbox itself
+   * asks with `requireVerifiedEmail` (ADR 0048).
+   */
+  emailVerified?: boolean;
   householdId: string | null;
   householdRole: 'admin' | 'member' | null;
   /**
@@ -50,8 +58,17 @@ export interface AuthenticatedEvent extends APIGatewayProxyEvent {
 interface CognitoClaims {
   sub: string;
   email: string;
+  /** A boolean in the token; a string once API Gateway has passed it on. */
+  email_verified?: boolean | string;
   'custom:household_id'?: string;
   'custom:household_role'?: 'admin' | 'member';
+}
+
+/** `email_verified` as the token states it, or null when it does not. */
+function readEmailVerified(claim: unknown): boolean | null {
+  if (claim === true || claim === 'true') return true;
+  if (claim === false || claim === 'false') return false;
+  return null;
 }
 
 /**
@@ -97,9 +114,11 @@ export const authMiddleware = (): middy.MiddlewareObj<
     }
 
     // Identity from Cognito claims; household context is resolved below.
+    const emailVerified = readEmailVerified(claims.email_verified);
     const user: AuthenticatedUser = {
       userId: claims.sub,
       email: claims.email,
+      ...(emailVerified === null ? {} : { emailVerified }),
       householdId: null,
       householdRole: null,
     };
@@ -191,6 +210,33 @@ export const requireAdmin = (): middy.MiddlewareObj<AuthenticatedEvent, APIGatew
   const before: middy.MiddlewareFn<AuthenticatedEvent, APIGatewayProxyResult> = (request) => {
     if (request.event.user?.householdRole !== 'admin') {
       throw createHttpError(403, 'Admin access required');
+    }
+  };
+
+  return { before };
+};
+
+/** What `requireVerifiedEmail` answers. */
+export const EMAIL_NOT_VERIFIED_MESSAGE =
+  "This account's email address has not been verified, so this can't be changed here. Contact support.";
+
+/**
+ * 403 when the token says the caller's email address is NOT verified
+ * (ADR 0048). For routes whose effect lands on the mailbox the claim names,
+ * where an address nobody proved they own must not be acted on.
+ *
+ * A token that does not carry the claim passes: tokens issued before the
+ * claim was made readable carry none for up to an hour, and refusing those
+ * would refuse everybody. Only a token that states `false` is turned away.
+ * Stack after `authMiddleware`.
+ */
+export const requireVerifiedEmail = (): middy.MiddlewareObj<
+  AuthenticatedEvent,
+  APIGatewayProxyResult
+> => {
+  const before: middy.MiddlewareFn<AuthenticatedEvent, APIGatewayProxyResult> = (request) => {
+    if (request.event.user?.emailVerified === false) {
+      throw createHttpError(403, EMAIL_NOT_VERIFIED_MESSAGE, { code: 'EMAIL_NOT_VERIFIED' });
     }
   };
 

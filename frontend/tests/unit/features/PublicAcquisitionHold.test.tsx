@@ -414,8 +414,12 @@ describe('free registration with paid activity on hold', () => {
       )
     );
 
-    expect(apiKeys).toMatch(/existing API-key entitlement/i);
-    expect(apiKeys).not.toMatch(/free-account entitlement/i);
+    // The API keys description moved to the catalogs as well, so it is read
+    // there; the component must not have grown a second copy of the claim.
+    expect(pricingCopy[0]).toMatch(/existing API-key entitlement/i);
+    expect(pricingCopy[1]).toMatch(/derecho a claves de API que ya tenga el hogar/i);
+    expect(apiKeys).not.toMatch(/entitlement/i);
+    for (const copy of pricingCopy) expect(copy).not.toMatch(/free-account entitlement/i);
     expect(pricingCopy[0]).toMatch(/current plan limits/i);
     for (const copy of pricingCopy) {
       expect(copy).not.toMatch(/current free-account limits/i);

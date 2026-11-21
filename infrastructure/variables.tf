@@ -158,6 +158,37 @@ variable "github_repo" {
   default     = ""
 }
 
+# GitHub environments whose jobs may assume the deploy role, the one CI/CD
+# role with IAM writes (ADR 0049). EVERY environment named here must carry a
+# required reviewer in the repository's settings. AWS cannot check that: the
+# reviewer is what stands between a workflow run and this role.
+variable "cicd_deploy_environments" {
+  description = "GitHub environments trusted to assume the deploy role. Each must have a required reviewer."
+  type        = list(string)
+  default     = ["production"]
+}
+
+# The one-time move to environment-only OIDC trust (ADR 0049). Left empty,
+# the deploy role is assumable only from the `production` GitHub environment.
+# docs/cicd-setup.md says when an admin passes a value on the command line,
+# and when to stop. It is never set in a tfvars file.
+variable "cicd_legacy_allowed_refs" {
+  description = "Git refs the deploy role may also be assumed from, for the one-time move to environment-only trust. Empty by default and in every tfvars file."
+  type        = list(string)
+  default     = []
+}
+
+# Permissions boundary on the Lambda execution roles (ADR 0049). The boundary
+# policy is created by modules/cicd in the production state and named by ARN
+# here, so the staging state can use it too. Turn it on for an environment
+# only after an admin has applied modules/cicd, or the roles would name a
+# policy that does not exist.
+variable "iam_permissions_boundary_enabled" {
+  description = "Attach the project permissions boundary to this environment's Lambda execution roles. The boundary policy must already exist (modules/cicd, applied by an admin)."
+  type        = bool
+  default     = false
+}
+
 # --- External integrations referenced from the api module ---
 #
 # Pattern: static credentials are held in SSM SecureString parameters.
@@ -659,6 +690,21 @@ variable "app_store_billing_enabled" {
   validation {
     condition     = contains(["0", "1"], var.app_store_billing_enabled)
     error_message = "app_store_billing_enabled must be exactly \"0\" or \"1\". The backend compares it to the literal string \"1\"."
+  }
+}
+
+# Which App Store environments' signed transactions grant a plan (ADR 0045).
+# Production only by default. "Production,Sandbox" is an opt-in an environment
+# makes in its own tfvars: staging always, production only for the days App
+# Review needs it.
+variable "app_store_environments" {
+  description = "App Store environments whose transactions grant entitlement: \"Production\" (default) or \"Production,Sandbox\". Sandbox purchases are free, so accept them only where that is intended."
+  type        = string
+  default     = "Production"
+
+  validation {
+    condition     = contains(["Production", "Production,Sandbox"], var.app_store_environments)
+    error_message = "app_store_environments must be exactly \"Production\" or \"Production,Sandbox\"."
   }
 }
 

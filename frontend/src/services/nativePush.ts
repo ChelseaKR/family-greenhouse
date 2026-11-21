@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 import { api } from './api';
 import { isNativeApp, getNativePlatform, hasNativePlugin } from '@/lib/platform';
 import { performPushAction, pushActionFromId, readPushTaskRef } from './pushActions';
@@ -156,10 +157,7 @@ async function obtainToken(): Promise<string> {
         rejectToken(new Error(error.error));
       })
     );
-    timer = setTimeout(
-      () => rejectToken(new Error('Timed out waiting for a push registration token.')),
-      15_000
-    );
+    timer = setTimeout(() => rejectToken(new Error(i18n.t('nativePush.registerTimeout'))), 15_000);
     await PushNotifications.register();
     return await tokenPromise;
   } finally {

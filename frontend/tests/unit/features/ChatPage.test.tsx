@@ -6,6 +6,8 @@ import { ChatPage } from '@/features/chat/ChatPage';
 import { billingService } from '@/services/billingService';
 import { chatService } from '@/services/chatService';
 import { useAuthStore } from '@/store/authStore';
+import enCatalog from '@/i18n/locales/en/translation.json';
+import esCatalog from '@/i18n/locales/es/translation.json';
 
 vi.mock('@/hooks/useActiveHouseholdId', () => ({
   useActiveHouseholdId: () => 'hh-1',
@@ -119,8 +121,11 @@ describe('ChatPage plan availability', () => {
     });
     renderPage();
 
+    // Level one: the locked card is the whole page, and as an h2 it left the
+    // page with no top-level heading.
     expect(
       await screen.findByRole('heading', {
+        level: 1,
         name: 'Plant care chat isn’t available on Seedling',
       })
     ).toBeInTheDocument();
@@ -146,6 +151,33 @@ describe('ChatPage plan availability', () => {
 
     expect(await screen.findByLabelText('Chat message')).toBeInTheDocument();
     expect(chatService.getBudget).toHaveBeenCalledOnce();
+  });
+
+  it('says under the message box that suggested reminders wait for a confirmation', async () => {
+    // Approved 2026-11-18. The third sentence read "Reminder suggestions wait
+    // for your confirm before being created", with "confirm" as a noun. The
+    // first two sentences are unchanged.
+    vi.mocked(billingService.getCurrentSubscription).mockResolvedValue({
+      planId: 'garden',
+    });
+    renderPage();
+
+    expect(
+      await screen.findByText(
+        'AI-generated — verify before acting. Refuses pesticide / dosage advice. Suggested reminders are created only after you confirm them.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/your confirm before/)).not.toBeInTheDocument();
+  });
+
+  it('says the same in Spanish, with the word the reminder card uses', () => {
+    expect(esCatalog.chat.page.disclaimer).toBe(
+      'Generado por IA: verifícalo antes de actuar. No da consejos sobre pesticidas ni dosis. Los recordatorios sugeridos solo se crean cuando los confirmas.'
+    );
+    // "Suggested reminder" / "Recordatorio sugerido" is the card's own title.
+    expect(enCatalog.chat.proposal.suggested.startsWith('Suggested reminder')).toBe(true);
+    expect(esCatalog.chat.proposal.suggested.startsWith('Recordatorio sugerido')).toBe(true);
+    expect(enCatalog.chat.page.disclaimer.includes('your confirm before')).toBe(false);
   });
 
   it('renders the composer for a household on the no-card Garden trial (ADR 0027)', async () => {
@@ -257,5 +289,85 @@ describe('ChatPage plan availability', () => {
       screen.getByText('General information, not veterinary advice.')
     );
     sessionStorage.removeItem('chat:conversationId:hh-1');
+  });
+
+  describe('for a screen reader and a keyboard', () => {
+    // A reply that waits until the test lets it through.
+    function holdReply() {
+      let finish: () => void = () => {};
+      vi.mocked(chatService.sendMessage).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = () =>
+              resolve({
+                conversationId: 'conv-9',
+                assistantText: 'You have three plants.',
+                proposals: [],
+              } as unknown as Awaited<ReturnType<typeof chatService.sendMessage>>);
+          })
+      );
+      return () => finish();
+    }
+
+    async function ask(question: string) {
+      vi.mocked(billingService.getCurrentSubscription).mockResolvedValue({ planId: 'garden' });
+      renderPage();
+      const box = await screen.findByLabelText('Chat message');
+      box.focus();
+      fireEvent.change(box, { target: { value: question } });
+      fireEvent.keyDown(box, { key: 'Enter' });
+      return box;
+    }
+
+    it('puts the conversation in a log named after the page, so a reply is read out', async () => {
+      const finish = holdReply();
+      await ask('What plants do I have?');
+
+      // Plain divs before: a question went out and nothing was announced back.
+      const log = screen.getByRole('log', { name: 'Plant care chat' });
+      finish();
+      await waitFor(() => expect(log).toHaveTextContent('You have three plants.'));
+    });
+
+    it('says who is speaking, which only the bubble side and colour showed', async () => {
+      const finish = holdReply();
+      await ask('What plants do I have?');
+      const log = screen.getByRole('log');
+      expect(log).toHaveTextContent('You: What plants do I have?');
+
+      finish();
+      await waitFor(() => expect(log).toHaveTextContent('Plant care chat: You have three plants.'));
+    });
+
+    it('says once that a reply is on its way, from a region that is always there', async () => {
+      const finish = holdReply();
+      await ask('What plants do I have?');
+
+      // It was an aria-label on an element with no text that only existed
+      // while the dots were showing. A live region reads text, not labels.
+      const status = screen.getByRole('status');
+      await waitFor(() => expect(status).toHaveTextContent('Plant care chat is replying'));
+      expect(screen.getByRole('log')).not.toContainElement(status);
+      finish();
+      await waitFor(() => expect(status).toBeEmptyDOMElement());
+    });
+
+    it('leaves the keyboard in the message box while the reply comes back', async () => {
+      const finish = holdReply();
+      const box = await ask('What plants do I have?');
+
+      // Disabled, it could not hold focus: every question sent the keyboard
+      // user back to the top of the page.
+      await waitFor(() => expect(screen.getByRole('status')).not.toBeEmptyDOMElement());
+      expect(box).not.toBeDisabled();
+      expect(box).toHaveFocus();
+      // One question at a time all the same.
+      fireEvent.change(box, { target: { value: 'And a second one' } });
+      fireEvent.keyDown(box, { key: 'Enter' });
+      expect(chatService.sendMessage).toHaveBeenCalledTimes(1);
+      finish();
+      await waitFor(() => expect(screen.getByRole('log')).toHaveTextContent('You have three'));
+      expect(box).toHaveFocus();
+    });
   });
 });

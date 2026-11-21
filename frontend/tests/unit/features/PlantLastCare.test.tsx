@@ -70,12 +70,12 @@ describe('care report: last care outside the recent window', () => {
     render(<CareReportCard plant={plantWithFullWindow()} />);
 
     const rows = screen.getAllByRole('listitem');
-    const feed = rows.find((row) => within(row).queryByText('fertilize'))!;
+    const feed = rows.find((row) => within(row).queryByText('Fertilize'))!;
     expect(within(feed).getByText(`none in last ${RECENT_COMPLETIONS_LIMIT}`)).toBeInTheDocument();
     expect(within(feed).getByText('last 1mo ago')).toBeInTheDocument();
     expect(within(feed).queryByText(/never/)).not.toBeInTheDocument();
 
-    const water = rows.find((row) => within(row).queryByText('water'))!;
+    const water = rows.find((row) => within(row).queryByText('Water'))!;
     expect(within(water).getByText('last 1w ago')).toBeInTheDocument();
   });
 

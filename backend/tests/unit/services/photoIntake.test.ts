@@ -30,7 +30,7 @@ interface StoredObject {
   metadata?: Record<string, string>;
 }
 
-/** A versioned bucket that enforces `If-Match`, as production's does. */
+/** A versioned bucket that enforces `If-Match` and `If-None-Match`, as production's does. */
 const bucket = {
   current: new Map<string, StoredObject>(),
   versions: [] as Array<{ key: string } & StoredObject>,
@@ -66,6 +66,16 @@ vi.mock('../../../src/utils/s3.js', () => ({
         const input = command.input;
         bucket.sends.push({ name, input });
         const key = input.Key as string;
+        if (name === 'HeadObjectCommand') {
+          const object = bucket.current.get(key);
+          if (!object) {
+            throw Object.assign(new Error('NotFound'), {
+              name: 'NotFound',
+              $metadata: { httpStatusCode: 404 },
+            });
+          }
+          return { ContentLength: object.body.length, ContentType: object.contentType };
+        }
         if (name === 'GetObjectCommand') {
           const object = bucket.current.get(key);
           if (!object) throw Object.assign(new Error('NoSuchKey'), { name: 'NoSuchKey' });
@@ -80,7 +90,10 @@ vi.mock('../../../src/utils/s3.js', () => ({
         }
         if (name === 'PutObjectCommand') {
           const existing = bucket.current.get(key);
-          if (input.IfMatch !== undefined && existing?.etag !== input.IfMatch) {
+          if (
+            (input.IfMatch !== undefined && existing?.etag !== input.IfMatch) ||
+            (input.IfNoneMatch === '*' && existing !== undefined)
+          ) {
             throw Object.assign(new Error('PreconditionFailed'), {
               name: 'PreconditionFailed',
               $metadata: { httpStatusCode: 412 },
@@ -109,9 +122,18 @@ vi.mock('../../../src/utils/s3.js', () => ({
   },
 }));
 
-const { cleanPhoto, sanitizeUploadedPhoto } = await import('../../../src/services/photoIntake.js');
+const { acceptUploadedPhoto, cleanPhoto, discardAcceptedPhoto, readUploadRequest } =
+  await import('../../../src/services/photoIntake.js');
 
-const KEY = 'plants/hh-1/p-1/0b7c0a4e-1111-4222-8333-944455556666.jpg';
+const HH = 'hh-1';
+const PLANT = 'p-1';
+/** The holding key a client uploads to, and the reference the presign returned for it. */
+const UPLOAD_KEY = 'uploads/hh-1/p-1/0b7c0a4e-1111-4222-8333-944455556666.jpg';
+const UPLOAD_URL = `https://images-bucket.s3.amazonaws.com/${UPLOAD_KEY}`;
+const STORED_PREFIX = 'plants/hh-1/p-1/';
+
+const storedKeys = () => [...bucket.current.keys()].filter((k) => k.startsWith(STORED_PREFIX));
+const uploadKeys = () => [...bucket.current.keys()].filter((k) => k.startsWith('uploads/'));
 
 /** Nothing a map could use: parsed, and searched for the fixture's own coordinate bytes. */
 function expectNoLocation(bytes: Uint8Array) {
@@ -198,74 +220,199 @@ describe('cleanPhoto', () => {
   });
 });
 
-describe('sanitizeUploadedPhoto — the confirm step, against a versioned bucket', () => {
-  it('rewrites a GPS-bearing upload in place, and the stored photo carries no location', async () => {
-    bucket.put(KEY, phoneJpeg(), 'image/jpeg', {
-      cacheControl: 'private, max-age=3600',
-      metadata: { 'via-sitter': 'true' },
-    });
-    const original = bucket.current.get(KEY)!;
-
-    await expect(sanitizeUploadedPhoto(KEY, 'image/jpeg')).resolves.toEqual({
+describe('readUploadRequest: an upload URL is only signed for a declared size', () => {
+  it('takes the declared type and size, and defaults the type to JPEG', () => {
+    expect(readUploadRequest({ contentType: 'image/png', contentLength: 1234 })).toEqual({
       ok: true,
-      changed: true,
+      contentType: 'image/png',
+      contentLength: 1234,
     });
-    const stored = bucket.current.get(KEY)!;
+    expect(readUploadRequest({ contentLength: 9 })).toMatchObject({
+      ok: true,
+      contentType: 'image/jpeg',
+    });
+  });
+
+  it('refuses a request with no size, in words a person can act on', () => {
+    for (const body of [null, undefined, {}, { contentType: 'image/png' }]) {
+      const result = readUploadRequest(body);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.message).toMatch(/reload the page or update the app/i);
+    }
+  });
+
+  it('accepts exactly 5 MiB and refuses one byte more', () => {
+    expect(readUploadRequest({ contentLength: 5 * 1024 * 1024 }).ok).toBe(true);
+    expect(readUploadRequest({ contentLength: 5 * 1024 * 1024 + 1 })).toEqual({
+      ok: false,
+      message: 'Image exceeds the 5 MiB limit',
+    });
+  });
+});
+
+describe('acceptUploadedPhoto — the confirm step, against a versioned bucket', () => {
+  it('stores a GPS-bearing upload under a new plants/ key, without its location', async () => {
+    bucket.put(UPLOAD_KEY, phoneJpeg(), 'image/jpeg');
+
+    const result = await acceptUploadedPhoto(HH, PLANT, UPLOAD_URL);
+    expect(result).toMatchObject({ ok: true, changed: true });
+    if (!result.ok) return;
+    // A key of the server's own: under the plant, and not the one uploaded to.
+    expect(result.key).toMatch(/^plants\/hh-1\/p-1\/[0-9a-f-]{36}\.jpg$/);
+    expect(result.key).not.toContain('0b7c0a4e-1111-4222-8333-944455556666');
+    expect(result.imageUrl).toBe(`https://images-bucket.s3.amazonaws.com/${result.key}`);
+    expect(storedKeys()).toEqual([result.key]);
+
+    const stored = bucket.current.get(result.key)!;
     expectNoLocation(stored.body);
     expect(inspectPhotoMetadata(stored.body).orientation).toBe(6);
-    // Written conditionally on the object it read, keeping its attributes.
+    // Written only if the key does not exist yet, as a private, typed object.
     const put = bucket.sends.find((s) => s.name === 'PutObjectCommand')!;
     expect(put.input).toMatchObject({
-      IfMatch: original.etag,
+      Key: result.key,
+      IfNoneMatch: '*',
       ContentType: 'image/jpeg',
+      ContentLength: stored.body.length,
       CacheControl: 'private, max-age=3600',
-      Metadata: { 'via-sitter': 'true' },
     });
-    // And the original's version is gone too: no version of the key holds GPS.
-    expect(bucket.versions.filter((v) => v.key === KEY)).toHaveLength(1);
+    // The upload is gone, every version of it, so no version of any key holds GPS.
+    expect(uploadKeys()).toEqual([]);
+    expect(bucket.versions.filter((v) => v.key === UPLOAD_KEY)).toEqual([]);
     for (const version of bucket.versions) expectNoLocation(version.body);
   });
 
+  it('copies an already-clean photo too: what is stored is never the object uploaded to', async () => {
+    bucket.put(UPLOAD_KEY, TINY_JPEG, 'image/jpeg');
+    const result = await acceptUploadedPhoto(HH, PLANT, UPLOAD_URL);
+    expect(result).toMatchObject({ ok: true, changed: false });
+    if (!result.ok) return;
+    expect(Buffer.from(bucket.current.get(result.key)!.body).equals(TINY_JPEG)).toBe(true);
+    expect(bucket.current.has(UPLOAD_KEY)).toBe(false);
+  });
+
+  it('a later write to the upload key does not change the stored photo', async () => {
+    bucket.put(UPLOAD_KEY, phoneJpeg(), 'image/jpeg');
+    const first = await acceptUploadedPhoto(HH, PLANT, UPLOAD_URL);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const storedBefore = Buffer.from(bucket.current.get(first.key)!.body);
+
+    // The upload URL is still within its lifetime, and something else arrives.
+    bucket.put(UPLOAD_KEY, Buffer.from('<html>not a photo</html>'), 'image/jpeg');
+
+    expect(Buffer.from(bucket.current.get(first.key)!.body).equals(storedBefore)).toBe(true);
+    expect(storedKeys()).toEqual([first.key]);
+    // Confirming it is a new check of the new bytes, which fail it.
+    const second = await acceptUploadedPhoto(HH, PLANT, UPLOAD_URL);
+    expect(second).toEqual({
+      ok: false,
+      status: 400,
+      message: 'Uploaded file is not a valid image',
+    });
+    expect(storedKeys()).toEqual([first.key]);
+    expect(uploadKeys()).toEqual([]);
+  });
+
   it('refuses a HEIC with GPS, and deletes it: nothing is left to attach or to read', async () => {
-    bucket.put(KEY, iphoneHeicWithGps(), 'image/jpeg');
-    const result = await sanitizeUploadedPhoto(KEY, 'image/jpeg');
+    bucket.put(UPLOAD_KEY, iphoneHeicWithGps(), 'image/jpeg');
+    const result = await acceptUploadedPhoto(HH, PLANT, UPLOAD_URL);
     expect(result).toEqual({
       ok: false,
       status: 400,
       message: 'Uploaded file is not a valid image',
     });
-    expect(bucket.current.has(KEY)).toBe(false);
-    expect(bucket.versions.filter((v) => v.key === KEY)).toEqual([]);
+    expect(bucket.current.size).toBe(0);
+    expect(bucket.versions).toEqual([]);
     expect(bucket.sends.some((s) => s.name === 'PutObjectCommand')).toBe(false);
   });
 
-  it('does not write a clean photo again', async () => {
-    bucket.put(KEY, TINY_JPEG, 'image/jpeg');
-    await expect(sanitizeUploadedPhoto(KEY, 'image/jpeg')).resolves.toEqual({
-      ok: true,
-      changed: false,
+  it('refuses a reference to a stored photo: only an upload can be confirmed', async () => {
+    const storedKey = `${STORED_PREFIX}11111111-2222-4333-8444-555555555555.jpg`;
+    bucket.put(storedKey, TINY_JPEG, 'image/jpeg');
+    const result = await acceptUploadedPhoto(
+      HH,
+      PLANT,
+      `https://images-bucket.s3.amazonaws.com/${storedKey}`
+    );
+    expect(result).toEqual({
+      ok: false,
+      status: 400,
+      message: 'imageUrl does not match a key issued for this plant',
     });
-    expect(bucket.sends.map((s) => s.name)).toEqual(['GetObjectCommand']);
+    expect(bucket.sends).toEqual([]);
+    expect(bucket.current.has(storedKey)).toBe(true);
   });
 
-  it('refuses, rather than overwrites, an upload that changed while it was being checked', async () => {
-    bucket.put(KEY, phoneJpeg(), 'image/jpeg');
-    const { s3 } = await import('../../../src/utils/s3.js');
-    const send = vi.mocked(s3.send);
-    const realSend = send.getMockImplementation()!;
-    // A second PUT lands between the read and the conditional write.
-    send.mockImplementationOnce(async (command) => {
-      const result = await realSend(command as never);
-      bucket.put(KEY, pngWithLocation(), 'image/png');
-      return result;
-    });
-    const result = await sanitizeUploadedPhoto(KEY, 'image/jpeg');
-    expect(result).toMatchObject({ ok: false, status: 409 });
-    for (const version of bucket.versions.filter(
-      (v) => v.key === KEY && v.contentType === 'image/jpeg'
-    )) {
-      // The first upload was never rewritten with anything.
-      expect(Buffer.from(version.body).equals(Buffer.from(phoneJpeg()))).toBe(true);
+  it("refuses another plant's upload and another household's", async () => {
+    for (const key of ['uploads/hh-1/p-2/a.jpg', 'uploads/hh-2/p-1/a.jpg']) {
+      bucket.put(key, TINY_JPEG, 'image/jpeg');
+      const result = await acceptUploadedPhoto(
+        HH,
+        PLANT,
+        `https://images-bucket.s3.amazonaws.com/${key}`
+      );
+      expect(result).toMatchObject({ ok: false, status: 400 });
     }
+    expect(bucket.sends).toEqual([]);
+  });
+
+  it('refuses when nothing was uploaded', async () => {
+    await expect(acceptUploadedPhoto(HH, PLANT, UPLOAD_URL)).resolves.toEqual({
+      ok: false,
+      status: 400,
+      message: 'Uploaded image not found; upload it before confirming',
+    });
+    expect(bucket.sends.map((s) => s.name)).toEqual(['HeadObjectCommand']);
+  });
+
+  it('refuses and removes an upload over the size cap, without reading it', async () => {
+    bucket.put(UPLOAD_KEY, new Uint8Array(5 * 1024 * 1024 + 1), 'image/jpeg');
+    await expect(acceptUploadedPhoto(HH, PLANT, UPLOAD_URL)).resolves.toEqual({
+      ok: false,
+      status: 400,
+      message: 'Image exceeds the 5 MiB limit',
+    });
+    expect(bucket.current.size).toBe(0);
+    expect(bucket.sends.map((s) => s.name)).toEqual(['HeadObjectCommand', 'DeleteObjectCommand']);
+  });
+
+  it('refuses and removes an empty upload', async () => {
+    bucket.put(UPLOAD_KEY, new Uint8Array(0), 'image/jpeg');
+    await expect(acceptUploadedPhoto(HH, PLANT, UPLOAD_URL)).resolves.toEqual({
+      ok: false,
+      status: 400,
+      message: 'Uploaded image is empty',
+    });
+    expect(bucket.current.size).toBe(0);
+  });
+
+  it('refuses and removes an upload stored with a type that is not an allowed image', async () => {
+    bucket.put(UPLOAD_KEY, TINY_JPEG, 'text/html');
+    await expect(acceptUploadedPhoto(HH, PLANT, UPLOAD_URL)).resolves.toEqual({
+      ok: false,
+      status: 400,
+      message: 'Uploaded file is not a valid image',
+    });
+    expect(bucket.current.size).toBe(0);
+    expect(bucket.sends.some((s) => s.name === 'GetObjectCommand')).toBe(false);
+  });
+
+  it('a storage failure that is not "missing" is an error, not a refusal', async () => {
+    bucket.put(UPLOAD_KEY, TINY_JPEG, 'image/jpeg');
+    const { s3 } = await import('../../../src/utils/s3.js');
+    vi.mocked(s3.send).mockImplementationOnce(async () => {
+      throw Object.assign(new Error('SlowDown'), { name: 'SlowDown' });
+    });
+    await expect(acceptUploadedPhoto(HH, PLANT, UPLOAD_URL)).rejects.toThrow('SlowDown');
+    expect(bucket.current.has(UPLOAD_KEY)).toBe(true);
+  });
+
+  it('discardAcceptedPhoto removes a stored photo whose row was never written', async () => {
+    bucket.put(UPLOAD_KEY, TINY_JPEG, 'image/jpeg');
+    const result = await acceptUploadedPhoto(HH, PLANT, UPLOAD_URL);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    await discardAcceptedPhoto(result.key);
+    expect(bucket.current.size).toBe(0);
   });
 });

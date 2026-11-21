@@ -8,10 +8,10 @@ interface CareGuideCardProps {
   perenualSpeciesId: number;
 }
 
-const sectionLabels: Record<'watering' | 'sunlight' | 'pruning', string> = {
-  watering: 'Watering',
-  sunlight: 'Sunlight',
-  pruning: 'Pruning',
+const sectionLabelKeys: Record<'watering' | 'sunlight' | 'pruning', string> = {
+  watering: 'plants.careGuideCard.watering',
+  sunlight: 'plants.careGuideCard.sunlight',
+  pruning: 'plants.careGuideCard.pruning',
 };
 
 /**
@@ -70,7 +70,7 @@ export function CareGuideCard({ perenualSpeciesId }: CareGuideCardProps) {
   return (
     <Card>
       <CardHeader
-        title="Care guide"
+        title={t('plants.careGuideCard.title')}
         description={
           data.commonName !== data.scientificName
             ? `${data.commonName} · ${data.scientificName}`
@@ -79,19 +79,23 @@ export function CareGuideCard({ perenualSpeciesId }: CareGuideCardProps) {
       />
 
       <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 text-sm">
-        {data.family && <Stat label="Family" value={data.family} />}
-        {data.cycle && <Stat label="Cycle" value={data.cycle} />}
-        {data.hardinessZone && <Stat label="Hardiness zones" value={data.hardinessZone} />}
-        {data.sunlight.length > 0 && <Stat label="Sunlight" value={data.sunlight.join(', ')} />}
+        {data.family && <Stat label={t('plants.careGuideCard.family')} value={data.family} />}
+        {data.cycle && <Stat label={t('plants.careGuideCard.cycle')} value={data.cycle} />}
+        {data.hardinessZone && (
+          <Stat label={t('plants.careGuideCard.hardinessZones')} value={data.hardinessZone} />
+        )}
+        {data.sunlight.length > 0 && (
+          <Stat label={t('plants.careGuideCard.sunlight')} value={data.sunlight.join(', ')} />
+        )}
       </dl>
 
       {data.sections.length === 0 ? (
-        <p className="text-sm text-gray-500">No care guide available for this species yet.</p>
+        <p className="text-sm text-gray-500">{t('plants.careGuideCard.none')}</p>
       ) : (
         <div className="space-y-4">
           {data.sections.map((s) => (
             <section key={s.type}>
-              <h4 className="text-sm font-semibold text-gray-900">{sectionLabels[s.type]}</h4>
+              <h4 className="text-sm font-semibold text-gray-900">{t(sectionLabelKeys[s.type])}</h4>
               <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">{s.description}</p>
             </section>
           ))}

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
@@ -48,7 +48,7 @@ function StatusPill({ status }: { status: ComponentStatus }) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-medium text-primary-800">
         <CheckCircleIcon className="h-3.5 w-3.5" aria-hidden="true" />
-        Operational
+        {t('statusPage.page.operational')}
       </span>
     );
   }
@@ -64,14 +64,14 @@ function StatusPill({ status }: { status: ComponentStatus }) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
         <ExclamationTriangleIcon className="h-3.5 w-3.5" aria-hidden="true" />
-        Degraded
+        {t('statusPage.page.degraded')}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
       <XCircleIcon className="h-3.5 w-3.5" aria-hidden="true" />
-      Down
+      {t('statusPage.page.down')}
     </span>
   );
 }
@@ -80,9 +80,8 @@ export function StatusPage() {
   const { t } = useTranslation();
 
   useMetaTags({
-    title: 'Status — Family Greenhouse',
-    description:
-      "Live status for Family Greenhouse's database, sign-in, and email/SMS delivery, checked every 60 seconds, plus a log of past incidents.",
+    title: t('statusPage.metaTitle'),
+    description: t('statusPage.metaDescription'),
   });
 
   const { data, isLoading, isError, error } = useQuery({
@@ -107,9 +106,9 @@ export function StatusPage() {
   return (
     <PublicShell>
       <PageIntro
-        eyebrow="Health check"
-        title="System status"
-        lede="Live state of the services that keep Family Greenhouse running."
+        eyebrow={t('statusPage.page.eyebrow')}
+        title={t('statusPage.page.title')}
+        lede={t('statusPage.page.lede')}
       />
 
       {/* Overall banner */}
@@ -126,17 +125,17 @@ export function StatusPage() {
           <div className="flex items-center gap-3">
             <QuestionMarkCircleIcon className="h-6 w-6 text-amber-600" aria-hidden="true" />
             <p className="font-serif text-xl text-amber-900">
-              Can&rsquo;t reach the status API from your network
+              {t('statusPage.page.unreachableTitle')}
             </p>
           </div>
           <p className="mt-2 text-sm text-amber-900">
-            This page checks <code>GET /health</code> from your browser, and that request got no
-            response. That can mean our API is down, but it can also be your connection, a VPN, or
-            an ad blocker. Try reloading, or check from another network.
+            <Trans i18nKey="statusPage.page.unreachableBody" components={{ code: <code /> }} />
           </p>
           {data?.checkedAt && (
             <p className="mt-2 text-xs text-gray-600">
-              Last successful check {new Date(data.checkedAt).toLocaleString()}.
+              {t('statusPage.page.lastSuccessful', {
+                when: new Date(data.checkedAt).toLocaleString(),
+              })}
             </p>
           )}
         </div>
@@ -170,13 +169,15 @@ export function StatusPage() {
               }`}
             >
               {overallStatus === 'ok' && t('statusPage.coreApiOperational')}
-              {overallStatus === 'degraded' && 'Some systems degraded'}
-              {overallStatus === 'down' && 'We are investigating an issue'}
+              {overallStatus === 'degraded' && t('statusPage.degraded')}
+              {overallStatus === 'down' && t('statusPage.down')}
             </p>
           </div>
           {data?.checkedAt && (
             <p className="mt-2 text-xs text-gray-600">
-              Last checked {new Date(data.checkedAt).toLocaleString()}.
+              {t('statusPage.page.lastChecked', {
+                when: new Date(data.checkedAt).toLocaleString(),
+              })}
             </p>
           )}
         </div>
@@ -184,9 +185,11 @@ export function StatusPage() {
 
       {/* Component breakdown */}
       <section className="mt-10">
-        <h2 className="font-serif text-2xl tracking-tight text-ink">Components</h2>
+        <h2 className="font-serif text-2xl tracking-tight text-ink">
+          {t('statusPage.page.components')}
+        </h2>
         {isLoading ? (
-          <p className="mt-4 text-sm text-gray-600">Checking…</p>
+          <p className="mt-4 text-sm text-gray-600">{t('statusPage.page.checking')}</p>
         ) : (
           <ul className="mt-4 divide-y divide-primary-100/60 rounded-xl border border-primary-100/80 bg-white shadow-journal">
             {data &&
@@ -204,7 +207,7 @@ export function StatusPage() {
                 {unreachable ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-parchment px-2.5 py-0.5 text-xs font-medium text-gray-700">
                     <QuestionMarkCircleIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                    No response
+                    {t('statusPage.page.noResponse')}
                   </span>
                 ) : (
                   <StatusPill status="down" />
@@ -219,8 +222,7 @@ export function StatusPage() {
       <IncidentLog incidents={INCIDENTS} unreachable={unreachable} serverErrored={serverErrored} />
 
       <p className="mt-12 text-xs text-gray-600">
-        Status is checked live against <code>GET /health</code> every 60 seconds. For real-time
-        reach we recommend bookmarking this page.
+        <Trans i18nKey="statusPage.page.footnote" components={{ code: <code /> }} />
       </p>
     </PublicShell>
   );

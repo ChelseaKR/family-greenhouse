@@ -889,7 +889,7 @@ describe('notifyCoveredCompletion', () => {
     const overflowCall = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
       input: { UpdateExpression: string };
     };
-    expect(overflowCall.input.UpdateExpression).toContain('ADD overflow');
+    expect(overflowCall.input.UpdateExpression).toContain('ADD #overflow');
   });
 
   it('does not reopen a row that was already delivered today', async () => {
@@ -1170,5 +1170,131 @@ describe('runHouseholdEmails', () => {
       .mocked(dynamodb.send)
       .mock.calls.filter((c) => (c[0] as { kind?: string }).kind === 'Query');
     expect(queries).toHaveLength(2); // u1 and u2, once each across both households
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DynamoDB expression validity
+// ---------------------------------------------------------------------------
+
+/**
+ * The checks DynamoDB itself runs on an UpdateCommand before it touches a row:
+ * no attribute named bare in an expression (a reserved word such as `items`
+ * fails with "Attribute name is a reserved keyword"), every `#name` and
+ * `:value` defined, and nothing defined that no expression uses.
+ *
+ * Production, v0.24.0 to v0.53.0: the queue write spelled `items` bare, so
+ * every household email failed here and none was ever queued. The mocked
+ * client above accepts any input, which is how it went unnoticed.
+ */
+function expressionProblems(input: {
+  UpdateExpression?: string;
+  ConditionExpression?: string;
+  ExpressionAttributeNames?: Record<string, string>;
+  ExpressionAttributeValues?: Record<string, unknown>;
+}): string[] {
+  const FUNCTIONS = new Set([
+    'if_not_exists',
+    'list_append',
+    'attribute_exists',
+    'attribute_not_exists',
+    'attribute_type',
+    'begins_with',
+    'contains',
+    'size',
+  ]);
+  const KEYWORDS = new Set(['SET', 'ADD', 'REMOVE', 'DELETE', 'AND', 'OR', 'NOT', 'BETWEEN', 'IN']);
+  const expressions = [input.UpdateExpression ?? '', input.ConditionExpression ?? ''].join(' ');
+  const problems: string[] = [];
+  for (const match of expressions.matchAll(/([#:]?)([A-Za-z_][A-Za-z0-9_]*)/g)) {
+    const [token, sigil, word] = match;
+    if (sigil === '#') {
+      if (!input.ExpressionAttributeNames?.[token]) problems.push(`undefined name ${token}`);
+    } else if (sigil === ':') {
+      if (!(token in (input.ExpressionAttributeValues ?? {}))) {
+        problems.push(`undefined value ${token}`);
+      }
+    } else if (!FUNCTIONS.has(word) && !KEYWORDS.has(word)) {
+      problems.push(`bare attribute name ${word}`);
+    }
+  }
+  for (const name of Object.keys(input.ExpressionAttributeNames ?? {})) {
+    if (!new RegExp(`${name}\\b`).test(expressions)) problems.push(`unused name ${name}`);
+  }
+  for (const value of Object.keys(input.ExpressionAttributeValues ?? {})) {
+    if (!new RegExp(`${value}\\b`).test(expressions)) problems.push(`unused value ${value}`);
+  }
+  return problems;
+}
+
+async function updateInputs() {
+  const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+  return vi
+    .mocked(dynamodb.send)
+    .mock.calls.map((call) => call[0] as unknown as { kind: string; input: never })
+    .filter((command) => command.kind === 'Update')
+    .map((command) => command.input as Parameters<typeof expressionProblems>[0]);
+}
+
+describe('household email DynamoDB writes', () => {
+  it('queues an up-for-grabs email with an expression DynamoDB accepts', async () => {
+    const taskService = await import('../../../src/services/taskService.js');
+    const plantService = await import('../../../src/services/plantService.js');
+    vi.mocked(taskService.getTasksDueBy).mockResolvedValue([unassignedTask] as never);
+    vi.mocked(plantService.getPlants).mockResolvedValue([{ id: 'p1', name: 'Monstera' }] as never);
+    const { upForGrabsHousehold } = await import('../../../src/services/householdEmails.js');
+
+    expect(await upForGrabsHousehold('hh', NOW)).toBe('queued');
+    const updates = await updateInputs();
+    expect(updates.length).toBeGreaterThan(0);
+    for (const input of updates) {
+      expect(expressionProblems(input)).toEqual([]);
+      // The reserved word that broke production, named so the intent survives
+      // a rewrite of the general check above.
+      expect(input.ExpressionAttributeNames).toMatchObject({ '#items': 'items' });
+      expect(input.ConditionExpression).toContain('size(#items)');
+    }
+  });
+
+  it('counts overflow on a full roll-up with an expression DynamoDB accepts', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send)
+      .mockRejectedValueOnce(conditionalFailure())
+      .mockResolvedValueOnce({} as never);
+    const { notifyCoveredCompletion } = await import('../../../src/services/householdEmails.js');
+    const task = {
+      plantId: 'p1',
+      plantName: 'Monstera',
+      type: 'water' as const,
+      customType: null,
+      assignedTo: 'u1',
+    };
+
+    expect(await notifyCoveredCompletion({ householdId: 'hh', task, completedBy: 'u2' }, NOW)).toBe(
+      'counted'
+    );
+    const updates = await updateInputs();
+    expect(updates).toHaveLength(2);
+    for (const input of updates) expect(expressionProblems(input)).toEqual([]);
+  });
+
+  it('marks a delivered row sent with an expression DynamoDB accepts', async () => {
+    await mockQueue([pendingRow()]);
+    const { flushUser } = await import('../../../src/services/householdEmails.js');
+
+    expect((await flushUser('u1', NOW)).sent).toBe(1);
+    const updates = await updateInputs();
+    expect(updates).toHaveLength(1);
+    expect(expressionProblems(updates[0])).toEqual([]);
+  });
+
+  it('catches a bare reserved word, so the check above cannot pass vacuously', () => {
+    expect(
+      expressionProblems({
+        UpdateExpression: 'SET items = :one',
+        ConditionExpression: 'size(items) < :max',
+        ExpressionAttributeValues: { ':one': [], ':max': 1 },
+      })
+    ).toEqual(['bare attribute name items', 'bare attribute name items']);
   });
 });

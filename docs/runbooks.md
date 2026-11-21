@@ -128,6 +128,189 @@ already mailed are skipped, not mailed twice.
 
 ---
 
+## Send the email-outage notice (one time, before 2026-11-23 00:00 UTC)
+
+**What:** the service note approved on 2026-11-19 about the 2026-09-04 to
+2026-11-19 email outage, to every member of an active household with email
+on. Admins of a household whose no-card trial ended in that window, and which
+is not on a paid plan, also get the "reply for another 14 days" paragraph.
+Code and approved text: `backend/src/services/emailOutageNotice.ts`.
+
+**Run**, from the repository root, with production credentials. The settings
+are read from the production digests Lambda, so nothing is typed by hand:
+
+```bash
+export AWS_PROFILE=family-greenhouse AWS_REGION=us-east-1 AWS_XRAY_CONTEXT_MISSING=IGNORE_ERROR
+FN=family-greenhouse-digests-production
+for k in TABLE_NAME COGNITO_USER_POOL_ID COGNITO_CLIENT_ID FRONTEND_URL \
+         SES_FROM_EMAIL SES_CONFIGURATION_SET SES_REPLY_TO; do
+  export "$k=$(aws lambda get-function-configuration --function-name "$FN" \
+    --query "Environment.Variables.$k" --output text)"
+done
+
+# 1. dry run: reads only, sends nothing, writes nothing, prints counts only
+npm run notify:email-outage --workspace backend --silent
+
+# 2. send
+npm run notify:email-outage --workspace backend --silent -- --confirm
+```
+
+**What to expect.** The dry run prints five lines, counts only (never an
+address, a name or an id):
+
+```text
+Email outage notice (email-outage-2026-11): dry run
+Households: H scanned, X left out as test households (creator not in Cognito), E with a trial that ended during the outage.
+Recipients: R would be emailed, T of them with the trial paragraph.
+Skipped: a email turned off, b already sent, c no address, d suppressed, e suppression status unknown.
+Dry run only: nothing was emailed and nothing was written. Pass --confirm to send.
+```
+
+`--confirm` prints `Sent: N, T of them with the trial paragraph.` and the
+same skip line, and exits 0. If any send failed it says how many and exits 1;
+their markers were released, so running `--confirm` again mails only them.
+A second `--confirm` after a clean run sends nothing and counts everyone as
+`already sent`.
+
+- **Test households** are those whose creator no longer exists in Cognito. To
+  name households yourself instead, pass `--allowlist ids.txt` (one household
+  id per line); the Cognito check is then skipped.
+- **Cutoff:** at or after 2026-11-23 00:00 UTC the script refuses to run,
+  dry run included. Pass `--late` to run anyway.
+- `--confirm` refuses to start without `SES_FROM_EMAIL` or with a non-https
+  `FRONTEND_URL`, so a half-configured shell cannot burn markers on dry sends.
+- Replies go to the support inbox (`SES_REPLY_TO`). A reply asking for the
+  extra 14 days is handled by hand; this script starts no trial. See the next
+  section.
+
+---
+
+## Restart an outage household's trial (one time, on a reply)
+
+**What:** an admin replied to the email-outage note asking for "another 14
+days of Garden". This restarts that household's no-card trial for 14 days from
+now: it writes `noCardTrialStartedAt` = now and `noCardTrialEndsAt` = now + 14
+days on the household METADATA row, plus a once-only marker
+(`SERVICE_NOTICE#trial-restart-2026-11 / HOUSEHOLD#{id}`). It is the one
+exception to "the trial is written once" (ADR 0027, amendment of 2026-11-19,
+from the approval of option A). Code: `backend/src/services/outageTrialRestart.ts`.
+
+It refuses, and writes nothing, for a household that does not exist, has no
+trial, is still on its trial, has Stripe state (a subscription status or id, a
+lifetime purchase or a paid plan), has App Store state or a running gift, whose
+trial ended outside 2026-09-04 to 2026-11-19, or that was already restarted.
+The write is cancelled if any of those fields changed after the read.
+
+**1. Load the production settings**, from the repository root, the same way
+as for the outage note:
+
+```bash
+export PATH="$HOME/.nvm/versions/node/v22.23.1/bin:$PATH"
+export AWS_PROFILE=family-greenhouse AWS_REGION=us-east-1 AWS_XRAY_CONTEXT_MISSING=IGNORE_ERROR
+FN=family-greenhouse-digests-production
+for k in TABLE_NAME COGNITO_USER_POOL_ID COGNITO_CLIENT_ID FRONTEND_URL \
+         SES_FROM_EMAIL SES_CONFIGURATION_SET SES_REPLY_TO; do
+  export "$k=$(aws lambda get-function-configuration --function-name "$FN" \
+    --query "Environment.Variables.$k" --output text)"
+done
+```
+
+**2. Check the trial-email copy fix is live.** The digests Lambda must run
+#1179 (commit `5ad1b06f`), or a household with plants from before the restart
+is told on day 10 that it has none. v0.53.2 is the first release with it.
+
+```bash
+git fetch origin
+SHA=$(aws lambda get-function-configuration --function-name "$FN" \
+  --query "Environment.Variables.GIT_SHA" --output text)
+git merge-base --is-ancestor 5ad1b06f "$SHA" && echo "copy fix is live" || echo "NOT live yet"
+```
+
+If it is not live, deploy the release that carries it before running
+`--confirm`. The day-10 email is due 10 days after the restart, but deploy
+first rather than count on that.
+
+**3. Find the household id** from the address the reply came from (reads only;
+the id and the address stay in your terminal):
+
+```bash
+SUB=$(aws cognito-idp list-users --user-pool-id "$COGNITO_USER_POOL_ID" \
+  --filter 'email = "person@example.com"' \
+  --query 'Users[0].Attributes[?Name==`sub`].Value' --output text)
+aws dynamodb query --table-name "$TABLE_NAME" --index-name GSI1 \
+  --key-condition-expression 'GSI1PK = :pk AND begins_with(GSI1SK, :hh)' \
+  --expression-attribute-values "{\":pk\":{\"S\":\"USER#$SUB\"},\":hh\":{\"S\":\"HOUSEHOLD#\"}}" \
+  --query 'Items[].householdId.S' --output text
+```
+
+If that lists more than one household, restart only the one the dry run
+accepts (the others refuse).
+
+**4. Dry run, then write:**
+
+```bash
+HH=<household id>
+
+# dry run: reads only (GetItem and Query), writes nothing, prints dates and counts only
+npm run trial:restart-outage --workspace backend --silent -- "$HH"
+
+# write
+npm run trial:restart-outage --workspace backend --silent -- "$HH" --confirm
+```
+
+**What to expect.** The dry run prints six lines, dates and counts only (never
+an address, a name or an id):
+
+```text
+No-card trial restart (trial-restart-2026-11): dry run
+Old trial: <start> to <end>, ended during the outage.
+New trial: starts <now>, ends <now + 14 days> (the two trial dates written).
+Trial emails: day 10 due from <end - 4 days>, day 14 from <end> until <end + 3 days>; 0 earlier trial-email markers.
+Admins: A, R with email and trial notices on.
+Dry run only: nothing was written. Pass --confirm to start the trial.
+```
+
+A refusal prints `Refused: <reason> Nothing was written.` and exits 1.
+`--confirm` prints the same lines (`WRITING` in place of `dry run`), then
+`Restarted: the trial runs from <start> to <end>.` and exits 0. A second
+`--confirm` for the same household is refused (`already restarted once`).
+The dates `--confirm` writes are taken at the moment it runs, not from the
+earlier dry run.
+
+**What happens after a restart** (checked against the code on 2026-11-19):
+
+- **Trial emails.** The daily `trialEmails` job (`handlers/digests`, 17:30
+  UTC, on in production) reads the trial as `active` again. It sends day 10
+  from the first run with 4 days or fewer left, and day 14 from the first run
+  after the end, up to 3 days late (`trialEmailDue`). Each goes once per admin,
+  through the usual marker, consent (`prefs.email` and `prefs.trialNotices`),
+  quiet hours and suppression checks. No markers are left from the outage: a
+  failed send released its slot, and the trials that ended before 2026-10-29
+  were never mailed. The dry run prints the marker count for the household; if
+  it is not 0, that email will not be sent again.
+- **What the emails say.** Facts are counted from the new start, so "plants
+  added" means added since the restart. With the copy fix (#1179), a household
+  that already had plants and added none is told
+  "Your household has N active plants." instead of "You have not added a
+  plant yet."; the day-10 "Add your first plant" lead shows only when the
+  household has no active plants (or the count could not be read). The emails
+  name no price.
+- **In the app.** `GET /billing/me` reports the trial `active` with the new end
+  date, so the dashboard and Settings → Billing show "trying Garden free until
+  {date}", then the ending-soon notice in the last 3 days. The household gets
+  Garden's caps and features, metered at Seedling (ADR 0027, decision 7).
+- **Checkout during the restarted trial** (#1050, `checkoutTrialFor`). A
+  household that starts a paid plan while the restarted trial runs adds a card
+  and is first charged on the new end date, not 14 days later. Inside the last
+  48 h 30 min, or after the end, checkout charges at once. A household that
+  had already used a card trial (`trialConsumedAt`) is charged at once either
+  way. Once it subscribes, Stripe state owns its entitlement and the trial
+  emails stop for it.
+- **At the end** it falls back to Seedling on the clock, with nothing deleted,
+  exactly as the first time.
+
+---
+
 ## Reminders not sending
 
 **Symptom:** users report missing watering reminders.

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link as RouterLink } from 'react-router';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { ArrowPathIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -20,6 +20,7 @@ import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { useAuthStore } from '@/store/authStore';
 import { getErrorMessage } from '@/services/api';
 import { downloadCsv, toCsv } from '@/utils/csv';
+import { todayLocalDateValue } from '@/features/household/localDates';
 import { track } from '@/services/analytics';
 import { appStorePurchasesAvailable } from '@/services/appStoreAvailability';
 import { ArchiveImportCard } from './ArchiveImportCard';
@@ -86,7 +87,9 @@ export function AccountSettings() {
         plantService.getPlants('all'),
         taskService.getTasks(),
       ]);
-      const stamp = new Date().toISOString().slice(0, 10);
+      // The person's own calendar day. `toISOString()` is UTC, so an export
+      // taken on a US evening was stamped with tomorrow's date.
+      const stamp = todayLocalDateValue();
       downloadCsv(
         `family-greenhouse-plants-${stamp}.csv`,
         toCsv(
@@ -135,7 +138,7 @@ export function AccountSettings() {
     mutationFn: async () => {
       track('data_exported', { context: 'json' });
       const blob = await authService.exportMyData();
-      const stamp = new Date().toISOString().slice(0, 10);
+      const stamp = todayLocalDateValue();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -159,11 +162,11 @@ export function AccountSettings() {
     <div className="space-y-6">
       <Card>
         <CardHeader
-          title="Profile"
+          title={t('settings.accountPanel.profileTitle')}
           description={
             hasHousehold
-              ? "Update how your name shows up in your household. Email changes aren't supported yet."
-              : "Update the name on your account. Email changes aren't supported yet."
+              ? t('settings.accountPanel.profileDescriptionHousehold')
+              : t('settings.accountPanel.profileDescription')
           }
         />
         {updateProfile.isError && (
@@ -173,7 +176,7 @@ export function AccountSettings() {
         )}
         {nameSuccess && (
           <Alert variant="success" className="mb-4">
-            Name updated.
+            {t('settings.accountPanel.nameUpdated')}
           </Alert>
         )}
         <form
@@ -187,8 +190,10 @@ export function AccountSettings() {
           }}
         >
           <Input
-            label="Name"
+            label={t('plants.list.groupName')}
             type="text"
+            // The person's own name (WCAG 1.3.5).
+            autoComplete="name"
             required
             maxLength={80}
             value={nameDraft}
@@ -198,7 +203,7 @@ export function AccountSettings() {
             }}
           />
           <div>
-            <p className="label">Email</p>
+            <p className="label">{t('notifications.email')}</p>
             <p className="text-sm text-gray-900">{user?.email ?? '—'}</p>
           </div>
           <div className="flex justify-end">
@@ -207,7 +212,7 @@ export function AccountSettings() {
               isLoading={updateProfile.isPending}
               disabled={nameDraft.trim().length === 0 || nameDraft.trim() === user?.name}
             >
-              Save name
+              {t('settings.accountPanel.saveName')}
             </Button>
           </div>
         </form>
@@ -215,8 +220,8 @@ export function AccountSettings() {
 
       <Card>
         <CardHeader
-          title="Change password"
-          description="You'll need your current password — we don't keep it on the server."
+          title={t('settings.accountPanel.changePasswordTitle')}
+          description={t('settings.accountPanel.changePasswordDescription')}
         />
         {changePassword.isError && (
           <Alert variant="error" className="mb-4">
@@ -225,7 +230,7 @@ export function AccountSettings() {
         )}
         {pwSuccess && (
           <Alert variant="success" className="mb-4">
-            Password updated.
+            {t('settings.accountPanel.passwordUpdated')}
           </Alert>
         )}
         <form
@@ -236,7 +241,7 @@ export function AccountSettings() {
           }}
         >
           <Input
-            label="Current password"
+            label={t('security.totp.currentPassword')}
             type="password"
             autoComplete="current-password"
             required
@@ -244,28 +249,28 @@ export function AccountSettings() {
             onChange={(e) => setOldPassword(e.target.value)}
           />
           <Input
-            label="New password"
+            label={t('auth.reset.newPassword')}
             type="password"
             autoComplete="new-password"
             required
             minLength={12}
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            helperText="At least 12 characters with uppercase, lowercase, and number."
+            helperText={t('settings.accountPanel.passwordHelper')}
           />
           <Input
-            label="Confirm new password"
+            label={t('auth.reset.confirmNewPassword')}
             type="password"
             autoComplete="new-password"
             required
             minLength={12}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            error={passwordMismatch ? 'Passwords do not match.' : undefined}
+            error={passwordMismatch ? t('auth.passwordMismatch') : undefined}
           />
           <div className="flex justify-end">
             <Button type="submit" isLoading={changePassword.isPending} disabled={!canSubmit}>
-              Update password
+              {t('settings.accountPanel.updatePassword')}
             </Button>
           </div>
         </form>
@@ -273,8 +278,8 @@ export function AccountSettings() {
 
       <Card>
         <CardHeader
-          title="Download my data"
-          description="Export your data anytime. The full export is a single JSON document covering your profile, notification preferences, household memberships, and the plants and tasks of every household you belong to. The CSV option is a spreadsheet-friendly subset (plants and tasks for your active household)."
+          title={t('settings.accountPanel.downloadTitle')}
+          description={t('settings.accountPanel.downloadDescription')}
         />
         {(exportJson.isError || exportData.isError) && (
           <Alert variant="error" className="mb-4">
@@ -291,17 +296,23 @@ export function AccountSettings() {
               isLoading={exportData.isPending}
               onClick={() => exportData.mutate()}
             >
-              Download CSV
+              {t('settings.accountPanel.downloadCsv')}
             </Button>
           )}
         </div>
         {hasHousehold && (
           <p className="mt-3 text-xs text-gray-600">
-            Moving in the other direction?{' '}
-            <RouterLink to="/plants/import" className="font-medium text-primary-700 underline">
-              Import plants from a CSV or JSON file
-            </RouterLink>{' '}
-            — including exports from this app.
+            <Trans
+              i18nKey="settings.accountPanel.importHint"
+              components={{
+                importLink: (
+                  <RouterLink
+                    to="/plants/import"
+                    className="font-medium text-primary-700 underline"
+                  />
+                ),
+              }}
+            />
           </p>
         )}
       </Card>
@@ -323,8 +334,8 @@ export function AccountSettings() {
 
       <Card>
         <CardHeader
-          title="Delete account"
-          description="Permanently removes your login and your household membership. If you're the only admin in a multi-member household, promote someone else first."
+          title={t('footer.deleteAccount')}
+          description={t('settings.accountPanel.deleteDescription')}
         />
         {/* Deleting the account cannot cancel an App Store subscription: Apple
             bills it, and only the subscriber can cancel it (Apple's account
@@ -349,9 +360,9 @@ export function AccountSettings() {
         isOpen={deleteConfirm}
         onClose={() => setDeleteConfirm(false)}
         onConfirm={() => deleteMe.mutate()}
-        title="Delete account?"
-        message="Your login and notification tokens are removed, and you lose access to every household. Shared care history is retained without your name. This cannot be undone."
-        confirmLabel="Yes, delete"
+        title={t('settings.accountPanel.deleteConfirmTitle')}
+        message={t('settings.accountPanel.deleteConfirmMessage')}
+        confirmLabel={t('settings.accountPanel.deleteConfirmLabel')}
         variant="danger"
         isLoading={deleteMe.isPending}
       />

@@ -3,7 +3,7 @@
   "pages": {
     "pothos": {
       "content": "sha256-a9ae5f746c1a8bbe524bcea6084e379127c77a273f4f3f20ee114994705d3943",
-      "lastmod": "2026-11-14"
+      "lastmod": "2026-11-21"
     },
     "monstera": {
       "content": "sha256-0c547db461e8de0a4273f9e3aef2ee680d631d72c08a4fcc772bb3a0fda888c6",
@@ -19,7 +19,7 @@
     },
     "peace-lily": {
       "content": "sha256-7ba8e9bd055f29aad6a636043ed910c4e5d75a4d7e5153ae937aa7eea9a57e8c",
-      "lastmod": "2026-11-14"
+      "lastmod": "2026-11-21"
     },
     "aloe-vera": {
       "content": "sha256-7cbc405a0265e66f649b6cb6046ce79f8ffc1dc560db3b07b1992b56f413e920",
@@ -79,11 +79,11 @@
     },
     "bird-of-paradise": {
       "content": "sha256-5b7dbf957afe41031f5b5ef4ec48038dd616a12e3683137ad71b0fd5657806e2",
-      "lastmod": "2026-11-14"
+      "lastmod": "2026-11-21"
     },
     "anthurium": {
       "content": "sha256-69cc256d167c431cc0210c8711b003908b747494f66b1cab26a1f0afbf15789e",
-      "lastmod": "2026-11-14"
+      "lastmod": "2026-11-21"
     },
     "chinese-evergreen": {
       "content": "sha256-13d7e5383b3cc03951462a10432dc76ceea2973b3f641c46f8e5f57661133e4e",
@@ -95,7 +95,7 @@
     },
     "money-tree": {
       "content": "sha256-f02efc9cbffff328e8af03dcccb6d49453a39c3c81f6029c9e70c1a6c0f6c59c",
-      "lastmod": "2026-11-14"
+      "lastmod": "2026-11-21"
     },
     "christmas-cactus": {
       "content": "sha256-92085ede6109c77c5233da1e8c062bd88034fdc441b2695e85d3786e92e39d40",

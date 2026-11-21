@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import clsx from 'clsx';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/Button';
+import { buttonStyles } from '@/components/buttonStyles';
 import { formatDate, formatRelativeDay } from '@/i18n/format';
 import { playHaptic } from '@/services/nativeHaptics';
 import type { WhoText } from '@/features/plants/plantCareText';
@@ -107,14 +108,16 @@ export function TaskChecklist({
       aria-pressed={segment === id}
       className={clsx(
         'inline-flex min-h-touch items-center justify-center gap-1.5 rounded-full px-3 text-sm font-semibold',
-        segment === id ? 'bg-paper text-ink shadow-sm ring-1 ring-primary-100' : 'text-gray-700'
+        segment === id ? 'bg-primary-700 text-white shadow-sm' : 'text-gray-700'
       )}
     >
       {label}
       {counts[id] > 0 && (
         <>
           {' '}
-          <span className="font-medium text-gray-600">{counts[id]}</span>
+          <span className={clsx('font-medium', segment === id ? 'text-white' : 'text-gray-600')}>
+            {counts[id]}
+          </span>
         </>
       )}
     </button>
@@ -126,8 +129,8 @@ export function TaskChecklist({
       <div className="px-6 pt-10 text-center">
         <h2 className="text-xl font-semibold text-ink">{t('tasks.list.emptyTitle')}</h2>
         <p className="mt-2 text-gray-600">{t('tasks.list.emptyBody')}</p>
-        <Link to="/plants/new" className="mt-5 inline-block">
-          <Button>{t('plants.addPlant')}</Button>
+        <Link to="/plants/new" className={buttonStyles({ className: 'mt-5' })}>
+          {t('plants.addPlant')}
         </Link>
       </div>
     );

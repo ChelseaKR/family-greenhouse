@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
+import { useTranslation } from 'react-i18next';
 import { searchSpecies, SpeciesEntry, speciesCatalog } from '@/utils/species';
 import { speciesService, type PerenualSpeciesSummary } from '@/services/speciesService';
 
@@ -50,11 +51,14 @@ export function SpeciesCombobox({
   onChange,
   onPick,
   onPerenualPick,
-  label = 'Species',
+  label: labelProp,
   error,
   helperText,
-  placeholder = 'e.g. Monstera deliciosa',
+  placeholder: placeholderProp,
 }: SpeciesComboboxProps) {
+  const { t } = useTranslation();
+  const label = labelProp ?? t('plants.speciesLabel');
+  const placeholder = placeholderProp ?? t('plants.speciesPlaceholder');
   const id = useId();
   const listId = `${id}-list`;
   const errorId = `${id}-error`;

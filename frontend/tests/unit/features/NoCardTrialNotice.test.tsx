@@ -30,6 +30,13 @@ vi.mock('@/services/billingService', async () => {
 vi.mock('@/hooks/useActiveHouseholdId', () => ({ useActiveHouseholdId: () => 'hh-1' }));
 const isAdmin = vi.fn(() => false);
 vi.mock('@/hooks/useActiveHouseholdRole', () => ({ useIsHouseholdAdmin: () => isAdmin() }));
+const appStoreOn = vi.fn(() => false);
+vi.mock('@/services/appStoreAvailability', async () => {
+  const actual = await vi.importActual<typeof import('@/services/appStoreAvailability')>(
+    '@/services/appStoreAvailability'
+  );
+  return { ...actual, appStorePurchasesAvailable: () => appStoreOn() };
+});
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -331,6 +338,88 @@ describe('NoCardTrialNotice inside the native (Capacitor) shells', () => {
     );
     expect(screen.queryByRole('link', { name: 'Plans and billing' })).not.toBeInTheDocument();
   });
+
+  describe('in the iPhone app with In-App Purchase on', () => {
+    beforeEach(() => {
+      appStoreOn.mockReturnValue(true);
+    });
+    afterEach(() => {
+      appStoreOn.mockReturnValue(false);
+      isAdmin.mockReturnValue(false);
+    });
+
+    it('an admin gets "See plans" to Plan status while the trial is ending, with no price', async () => {
+      isAdmin.mockReturnValue(true);
+      vi.mocked(billingService.getCurrentSubscription).mockResolvedValue(
+        trialEndingIn(2 * DAY, 'active')
+      );
+      renderNotice('dashboard');
+
+      expect(await screen.findByRole('link', { name: 'See plans' })).toHaveAttribute(
+        'href',
+        '/settings/billing'
+      );
+      expect(screen.queryByRole('link', { name: 'View plan status' })).not.toBeInTheDocument();
+      expect(screen.getByTestId('no-card-trial-notice').textContent).not.toContain('$');
+    });
+
+    it('an admin gets "See plans" after the trial has ended', async () => {
+      isAdmin.mockReturnValue(true);
+      vi.mocked(billingService.getCurrentSubscription).mockResolvedValue(
+        trialEndingIn(-DAY, 'ended')
+      );
+      renderNotice('dashboard');
+
+      expect(await screen.findByRole('link', { name: 'See plans' })).toHaveAttribute(
+        'href',
+        '/settings/billing'
+      );
+    });
+
+    it('no button in the first days of the trial: an Apple purchase would end the free days', async () => {
+      isAdmin.mockReturnValue(true);
+      vi.mocked(billingService.getCurrentSubscription).mockResolvedValue(
+        trialEndingIn(11 * DAY, 'active')
+      );
+      renderNotice('dashboard');
+
+      expect(await screen.findByRole('link', { name: 'View plan status' })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'See plans' })).not.toBeInTheDocument();
+    });
+
+    it('a member keeps the "View plan status" link and gets no button', async () => {
+      vi.mocked(billingService.getCurrentSubscription).mockResolvedValue(
+        trialEndingIn(2 * DAY, 'active')
+      );
+      renderNotice('dashboard');
+
+      expect(await screen.findByRole('link', { name: 'View plan status' })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'See plans' })).not.toBeInTheDocument();
+    });
+
+    it('Plan status itself gets no button: the plans are already on that screen', async () => {
+      isAdmin.mockReturnValue(true);
+      vi.mocked(billingService.getCurrentSubscription).mockResolvedValue(
+        trialEndingIn(2 * DAY, 'active')
+      );
+      renderNotice('billing');
+
+      expect(await screen.findByText('When it ends:')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'See plans' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('an iPhone build without In-App Purchase gives an admin no button', async () => {
+    isAdmin.mockReturnValue(true);
+    vi.mocked(billingService.getCurrentSubscription).mockResolvedValue(
+      trialEndingIn(2 * DAY, 'active')
+    );
+    renderNotice('dashboard');
+
+    expect(await screen.findByRole('link', { name: 'View plan status' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'See plans' })).not.toBeInTheDocument();
+    isAdmin.mockReturnValue(false);
+  });
 });
 
 /** The catalog as the API publishes it with payments on: Garden carries its price. */
@@ -369,7 +458,7 @@ describe('NoCardTrialNotice: what keeping Garden costs, on the dashboard', () =>
     renderView(trialEndingIn(11 * DAY, 'active'));
     expect(screen.getByRole('link', { name: 'Keep Garden for $4.99 a month' })).toHaveAttribute(
       'href',
-      '/settings/billing'
+      '/settings/billing#change-plan'
     );
     // The plain link stays beside it.
     expect(screen.getByRole('link', { name: 'Plans and billing' })).toBeInTheDocument();
@@ -382,7 +471,7 @@ describe('NoCardTrialNotice: what keeping Garden costs, on the dashboard', () =>
     renderView(trialEndingIn(-DAY, 'ended'));
     expect(screen.getByRole('link', { name: 'Get Garden back for $4.99 a month' })).toHaveAttribute(
       'href',
-      '/settings/billing'
+      '/settings/billing#change-plan'
     );
   });
 

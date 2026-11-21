@@ -297,6 +297,31 @@ describe('householdService', () => {
     expect(sent.input.Item.ttl).toEqual(expect.any(Number));
   });
 
+  it('createInvite gives a link five uses and an emailed invite one, none taken (ADR 0047)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { createInvite, INVITE_LINK_MAX_USES, INVITE_EMAIL_MAX_USES } =
+      await import('../../../src/services/householdService.js');
+    expect(INVITE_LINK_MAX_USES).toBe(5);
+    expect(INVITE_EMAIL_MAX_USES).toBe(1);
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const link = await createInvite('hh', 'user-1');
+    const explicitLink = await createInvite('hh', 'user-1', 'link');
+    const emailed = await createInvite('hh', 'user-1', 'email');
+    expect(link).toMatchObject({ maxUses: 5, uses: 0 });
+    expect(explicitLink).toMatchObject({ maxUses: 5, uses: 0 });
+    expect(emailed).toMatchObject({ maxUses: 1, uses: 0 });
+    const stored = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map(
+        (c) => (c[0] as unknown as { input: { Item: Record<string, unknown> } }).input.Item
+      );
+    expect(stored.map((i) => [i.maxUses, i.uses])).toEqual([
+      [5, 0],
+      [5, 0],
+      [1, 0],
+    ]);
+  });
+
   it('getInvite returns null for expired invites', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     const { getInvite } = await import('../../../src/services/householdService.js');
@@ -326,6 +351,98 @@ describe('householdService', () => {
     });
     const invite = await getInvite('X');
     expect(invite?.code).toBe('X');
+  });
+
+  it('getInvite reads a row from before invites were counted as a link with every use left', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { getInvite } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: {
+        code: 'OLD',
+        householdId: 'hh',
+        createdBy: 'user-1',
+        createdAt: '2026-11-15T00:00:00.000Z',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      },
+    });
+    expect(await getInvite('OLD')).toMatchObject({ code: 'OLD', maxUses: 5, uses: 0 });
+  });
+
+  it('getInvite returns null once an invite is used up, and not one use sooner', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { getInvite } = await import('../../../src/services/householdService.js');
+    const row = (maxUses: number, uses: number) => ({
+      Item: {
+        code: 'X',
+        householdId: 'hh',
+        createdBy: 'user-1',
+        createdAt: '2026-11-15T00:00:00.000Z',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        maxUses,
+        uses,
+      },
+    });
+    vi.mocked(dynamodb.send).mockResolvedValueOnce(row(1, 1));
+    expect(await getInvite('X')).toBeNull();
+    vi.mocked(dynamodb.send).mockResolvedValueOnce(row(5, 5));
+    expect(await getInvite('X')).toBeNull();
+    vi.mocked(dynamodb.send).mockResolvedValueOnce(row(5, 4));
+    expect(await getInvite('X')).toMatchObject({ uses: 4, maxUses: 5 });
+    vi.mocked(dynamodb.send).mockResolvedValueOnce(row(1, 0));
+    expect(await getInvite('X')).toMatchObject({ uses: 0, maxUses: 1 });
+  });
+
+  it('inviteRevokedByHousehold: an invite made at or before the instant is off, a later one is not', async () => {
+    const { inviteRevokedByHousehold } = await import('../../../src/services/householdService.js');
+    const at = '2026-11-17T12:00:00.000Z';
+    expect(inviteRevokedByHousehold({ createdAt: '2026-11-17T11:59:59.999Z' }, {})).toBe(false);
+    expect(
+      inviteRevokedByHousehold({ createdAt: '2026-11-17T11:59:59.999Z' }, { invitesRevokedAt: at })
+    ).toBe(true);
+    expect(inviteRevokedByHousehold({ createdAt: at }, { invitesRevokedAt: at })).toBe(true);
+    expect(
+      inviteRevokedByHousehold({ createdAt: '2026-11-17T12:00:00.001Z' }, { invitesRevokedAt: at })
+    ).toBe(false);
+  });
+
+  it('revokeHouseholdInvites stamps the household row, and answers null for a household that is gone', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { revokeHouseholdInvites } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+    const at = await revokeHouseholdInvites('hh', new Date('2026-11-17T12:00:00.000Z'));
+    expect(at).toBe('2026-11-17T12:00:00.000Z');
+    const cmd = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+      kind: string;
+      input: {
+        Key: { PK: string; SK: string };
+        UpdateExpression: string;
+        ConditionExpression: string;
+        ExpressionAttributeValues: Record<string, string>;
+      };
+    };
+    expect(cmd.kind).toBe('Update');
+    expect(cmd.input.Key).toEqual({ PK: 'HOUSEHOLD#hh', SK: 'METADATA' });
+    expect(cmd.input.UpdateExpression).toBe('SET invitesRevokedAt = :now');
+    expect(cmd.input.ConditionExpression).toBe('attribute_exists(PK)');
+    expect(cmd.input.ExpressionAttributeValues).toEqual({ ':now': '2026-11-17T12:00:00.000Z' });
+
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(
+      Object.assign(new Error('no row'), { name: 'ConditionalCheckFailedException' })
+    );
+    expect(await revokeHouseholdInvites('gone')).toBeNull();
+  });
+
+  it('getHousehold carries invitesRevokedAt when the row has one', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { getHousehold } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: { id: 'hh', name: 'Home', createdAt: '', createdBy: 'u', invitesRevokedAt: 'T' },
+    });
+    expect((await getHousehold('hh'))?.invitesRevokedAt).toBe('T');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: { id: 'hh', name: 'Home', createdAt: '', createdBy: 'u' },
+    });
+    expect(await getHousehold('hh')).not.toHaveProperty('invitesRevokedAt');
   });
 
   // Shape of the TransactWrite payload addMember sends.
@@ -440,6 +557,148 @@ describe('householdService', () => {
     expect(vi.mocked(dynamodb.send).mock.calls).toHaveLength(2);
   });
 
+  // --- Joining by invite takes a use, in the same transaction (ADR 0047) ---
+
+  type InviteTransact = {
+    kind: string;
+    input: {
+      TransactItems: Array<{
+        Update?: {
+          Key: { PK: string; SK: string };
+          UpdateExpression: string;
+          ConditionExpression: string;
+          ExpressionAttributeNames?: Record<string, string>;
+          ExpressionAttributeValues: Record<string, unknown>;
+        };
+      }>;
+    };
+  };
+  const INVITE = { code: 'abc123', createdAt: '2026-11-15T00:00:00.000Z', maxUses: 5 };
+  const cancelled = (...codes: string[]) =>
+    Object.assign(new Error('cancelled'), {
+      name: 'TransactionCanceledException',
+      CancellationReasons: codes.map((Code) => ({ Code })),
+    });
+
+  it('addMember without an invite sends no invite write (household creation is unchanged)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { addMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { memberCount: 0 } });
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+    await addMember('hh', 'u', 'Name', 'e@x.com', 6, 'admin');
+    const cmd = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as InviteTransact;
+    expect(cmd.input.TransactItems).toHaveLength(2);
+    expect(cmd.input.TransactItems[1].Update?.ConditionExpression).not.toContain(
+      'invitesRevokedAt'
+    );
+  });
+
+  it('addMember with an invite takes one use and requires the household has not turned it off', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { addMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { memberCount: 2 } });
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+    await addMember('hh', 'u', 'Name', 'e@x.com', 6, 'member', INVITE);
+    const cmd = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as InviteTransact;
+    expect(cmd.kind).toBe('TransactWrite');
+    expect(cmd.input.TransactItems).toHaveLength(3);
+    const counter = cmd.input.TransactItems[1].Update!;
+    expect(counter.ConditionExpression).toBe(
+      'attribute_exists(PK) AND (attribute_not_exists(memberCount) OR memberCount < :max) AND ' +
+        '(attribute_not_exists(invitesRevokedAt) OR invitesRevokedAt < :inviteCreatedAt)'
+    );
+    expect(counter.ExpressionAttributeValues).toEqual({
+      ':base': 0,
+      ':one': 1,
+      ':max': 6,
+      ':inviteCreatedAt': INVITE.createdAt,
+    });
+    const use = cmd.input.TransactItems[2].Update!;
+    expect(use.Key).toEqual({ PK: 'INVITE#abc123', SK: 'METADATA' });
+    expect(use.UpdateExpression).toBe('SET #uses = if_not_exists(#uses, :zero) + :one');
+    expect(use.ConditionExpression).toBe(
+      'attribute_exists(PK) AND (attribute_not_exists(#uses) OR #uses < :maxUses) AND expiresAt > :now'
+    );
+    expect(use.ExpressionAttributeNames).toEqual({ '#uses': 'uses' });
+    expect(use.ExpressionAttributeValues).toMatchObject({ ':zero': 0, ':one': 1, ':maxUses': 5 });
+  });
+
+  it('addMember with an invite on an unlimited plan still checks the invite, with no member cap', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { addMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { memberCount: 2 } });
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+    await addMember('hh', 'u', 'Name', 'e@x.com', null, 'member', INVITE);
+    const cmd = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as InviteTransact;
+    const counter = cmd.input.TransactItems[1].Update!;
+    expect(counter.ConditionExpression).toBe(
+      'attribute_exists(PK) AND ' +
+        '(attribute_not_exists(invitesRevokedAt) OR invitesRevokedAt < :inviteCreatedAt)'
+    );
+    expect(counter.ExpressionAttributeValues).not.toHaveProperty(':max');
+  });
+
+  it('addMember maps a used-up or expired invite to InviteUnavailableError, and adds nobody', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { addMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { memberCount: 2 } });
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(
+      cancelled('None', 'None', 'ConditionalCheckFailed')
+    );
+    await expect(
+      addMember('hh', 'u', 'Name', 'e@x.com', 6, 'member', INVITE)
+    ).rejects.toMatchObject({ name: 'InviteUnavailableError' });
+  });
+
+  it('addMember maps a household-row refusal to InviteUnavailableError when the invite was turned off', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { addMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { memberCount: 2 } });
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(
+      cancelled('None', 'ConditionalCheckFailed', 'None')
+    );
+    // The re-read that tells a turned-off invite from a full household.
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: {
+        id: 'hh',
+        name: 'Home',
+        createdAt: '',
+        createdBy: 'a',
+        invitesRevokedAt: '2026-11-16T00:00:00.000Z',
+      },
+    });
+    await expect(
+      addMember('hh', 'u', 'Name', 'e@x.com', 6, 'member', INVITE)
+    ).rejects.toMatchObject({ name: 'InviteUnavailableError' });
+  });
+
+  it('addMember still maps a household-row refusal to PlanLimitError when the invite is fine', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { addMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { memberCount: 6 } });
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(
+      cancelled('None', 'ConditionalCheckFailed', 'None')
+    );
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: { id: 'hh', name: 'Home', createdAt: '', createdBy: 'a' },
+    });
+    await expect(
+      addMember('hh', 'u', 'Name', 'e@x.com', 6, 'member', INVITE)
+    ).rejects.toMatchObject({ name: 'PlanLimitError' });
+  });
+
+  it('addMember: "already a member" still wins over an invite refusal', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { addMember } = await import('../../../src/services/householdService.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: { memberCount: 2 } });
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(
+      cancelled('ConditionalCheckFailed', 'None', 'ConditionalCheckFailed')
+    );
+    await expect(
+      addMember('hh', 'u', 'Name', 'e@x.com', 6, 'member', INVITE)
+    ).rejects.toMatchObject({ name: 'ConditionalCheckFailedException' });
+  });
+
   // Members listing that passes the last-admin guard (the removed user 'u' is
   // a plain member, and another admin remains). Prepended to removeMember /
   // setMemberRole-demotion flows because the L1 guard reads members first.
@@ -462,7 +721,12 @@ describe('householdService', () => {
         TransactItems: [
           { Delete: { Key: { SK: string }; ConditionExpression: string } },
           {
-            Update: { Key: { SK: string }; UpdateExpression: string; ConditionExpression: string };
+            Update: {
+              Key: { SK: string };
+              UpdateExpression: string;
+              ConditionExpression: string;
+              ExpressionAttributeValues: Record<string, string>;
+            };
           },
         ];
       };
@@ -472,8 +736,13 @@ describe('householdService', () => {
     expect(del.Delete.Key.SK).toBe('MEMBER#u');
     expect(del.Delete.ConditionExpression).toBe('attribute_exists(PK)');
     expect(counter.Update.Key.SK).toBe('METADATA');
+    // The same write turns off the household's invites so far (ADR 0047),
+    // so whoever is out cannot come back with a link they still hold.
     expect(counter.Update.UpdateExpression).toBe(
-      'SET memberCount = if_not_exists(memberCount, :one) - :one'
+      'SET memberCount = if_not_exists(memberCount, :one) - :one, invitesRevokedAt = :now'
+    );
+    expect(counter.Update.ExpressionAttributeValues[':now']).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
     );
     // Floor at 0.
     expect(counter.Update.ConditionExpression).toBe(
@@ -509,12 +778,21 @@ describe('householdService', () => {
       })
     );
     vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({});
     await removeMember('hh', 'u');
     const calls = vi.mocked(dynamodb.send).mock.calls;
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(4);
     const fallback = calls[2][0] as unknown as { kind: string; input: { Key: { SK: string } } };
     expect(fallback.kind).toBe('Delete');
     expect(fallback.input.Key.SK).toBe('MEMBER#u');
+    // The invites are still turned off, on a write of their own.
+    const revoke = calls[3][0] as unknown as {
+      kind: string;
+      input: { Key: { SK: string }; UpdateExpression: string };
+    };
+    expect(revoke.kind).toBe('Update');
+    expect(revoke.input.Key.SK).toBe('METADATA');
+    expect(revoke.input.UpdateExpression).toBe('SET invitesRevokedAt = :now');
   });
 
   it('getMemberByUserId returns null when missing', async () => {

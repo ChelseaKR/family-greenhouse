@@ -62,6 +62,7 @@ import { playHaptic } from '@/services/nativeHaptics';
 import { toast } from '@/store/toastStore';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/Button';
+import { buttonStyles } from '@/components/buttonStyles';
 import { Card } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
 import { NativePushPrompt } from '@/components/NativePushPrompt';
@@ -811,7 +812,7 @@ export function TasksPage() {
           className={clsx(
             'inline-flex min-h-touch items-center gap-2 rounded-md px-3 py-2 text-sm font-medium',
             displayMode === 'schedule'
-              ? 'bg-primary-100 text-primary-900'
+              ? 'bg-primary-700 text-white'
               : 'text-gray-600 hover:bg-primary-50'
           )}
         >
@@ -825,7 +826,7 @@ export function TasksPage() {
           className={clsx(
             'inline-flex min-h-touch items-center gap-2 rounded-md px-3 py-2 text-sm font-medium',
             displayMode === 'round'
-              ? 'bg-primary-100 text-primary-900'
+              ? 'bg-primary-700 text-white'
               : 'text-gray-600 hover:bg-primary-50'
           )}
         >
@@ -850,7 +851,7 @@ export function TasksPage() {
             className={clsx(
               'inline-flex min-h-touch items-center rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
               filter === f.id
-                ? 'bg-primary-100 text-primary-800 border-primary-400'
+                ? 'bg-primary-700 text-white border-primary-700'
                 : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
             )}
             aria-pressed={filter === f.id}
@@ -888,8 +889,8 @@ export function TasksPage() {
                 {t('tasks.page.clearFilter')}
               </Button>
             ) : (
-              <Link to="/plants">
-                <Button>{t('tasks.page.viewPlants')}</Button>
+              <Link to="/plants" className={buttonStyles()}>
+                {t('tasks.page.viewPlants')}
               </Link>
             )
           }

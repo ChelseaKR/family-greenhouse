@@ -15,11 +15,12 @@ import { Alert } from '@/components/Alert';
 import { SpeciesCombobox } from '@/components/SpeciesCombobox';
 import { SpacePicker } from './SpacePicker';
 
-// Built with `t` so the house-rule length message is localized; the other
-// messages are unchanged from the module-level schema this replaces.
+// Built with `t` so the required-name and house-rule length messages are
+// localized; the other messages are unchanged from the module-level schema
+// this replaces.
 const buildPlantSchema = (t: ReturnType<typeof useTranslation>['t']) =>
   z.object({
-    name: z.string().min(1, 'Name is required').max(100),
+    name: z.string().min(1, t('validation.nameRequired')).max(100),
     species: z.string().max(100).optional(),
     spaceId: z.string().optional(),
     placementNote: z.string().max(120).optional(),
@@ -162,7 +163,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
                     className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-md bg-paper text-gray-600 hover:text-gray-800 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
                     onClick={handleClose}
                   >
-                    <span className="sr-only">Close</span>
+                    <span className="sr-only">{t('common.close')}</span>
                     <XMarkIcon className="h-6 w-6" aria-hidden="true" />
                   </button>
                 </div>
@@ -171,7 +172,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
                   as="h3"
                   className="mb-4 pr-12 font-serif text-2xl tracking-tight text-ink"
                 >
-                  Edit plant
+                  {t('plants.editTitle')}
                 </Dialog.Title>
 
                 {mutation.isError && (
@@ -182,7 +183,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
                   <Input
-                    label="Plant name"
+                    label={t('plants.nameLabel')}
                     required
                     error={errors.name?.message}
                     {...register('name')}
@@ -254,17 +255,17 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
 
                   <div>
                     <label htmlFor="notes" className="label">
-                      Notes
+                      {t('plants.notesLabel')}
                     </label>
                     <textarea id="notes" rows={4} className="input" {...register('notes')} />
                   </div>
 
                   <div className="flex justify-end gap-3 pt-4">
                     <Button type="button" variant="secondary" onClick={handleClose}>
-                      Cancel
+                      {t('common.cancel')}
                     </Button>
                     <Button type="submit" isLoading={mutation.isPending}>
-                      Save changes
+                      {t('householdChannel.save')}
                     </Button>
                   </div>
                 </form>

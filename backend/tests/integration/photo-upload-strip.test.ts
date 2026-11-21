@@ -12,9 +12,14 @@
  *   - a sitter's photo-back           POST /sitter/{token}/photos
  *
  * and then the bucket itself is PARSED: the object a plant ends up pointing
- * at, and every version of it, must carry no location. A HEIC is refused and
- * leaves nothing behind. DynamoDB is the in-memory table; S3 is an in-memory
- * versioned bucket that enforces If-Match.
+ * at, and every version of every object, must carry no location. A HEIC is
+ * refused and leaves nothing behind. DynamoDB is the in-memory table; S3 is an
+ * in-memory versioned bucket that enforces If-Match and If-None-Match.
+ *
+ * The two confirm routes also store the photo apart from the upload
+ * (ADR 0046): the client's bytes land under `uploads/`, the plant points at a
+ * `plants/` key the server chose, and a later write to the upload key changes
+ * nothing the plant shows.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInMemoryDynamo } from './support/inMemoryDynamo.js';
@@ -85,7 +90,10 @@ vi.mock('../../src/utils/s3.js', async (orig) => {
             };
           }
           case 'PutObjectCommand': {
-            if (input.IfMatch !== undefined && bucket.current.get(key)?.etag !== input.IfMatch) {
+            if (
+              (input.IfMatch !== undefined && bucket.current.get(key)?.etag !== input.IfMatch) ||
+              (input.IfNoneMatch === '*' && bucket.current.has(key))
+            ) {
               throw Object.assign(new Error('PreconditionFailed'), { name: 'PreconditionFailed' });
             }
             bucket.put(key, new Uint8Array(input.Body as Uint8Array), input.ContentType as string);
@@ -140,11 +148,19 @@ async function seed() {
   return { householdId, plantId: plant.id, identity };
 }
 
-/** A presigned PUT, as the phone would make it: the bytes land at a minted key. */
+/** A presigned PUT, as the phone would make it: the bytes land at a minted holding key. */
 function uploadAs(householdId: string, plantId: string, bytes: Uint8Array, contentType: string) {
-  const key = `plants/${householdId}/${plantId}/${crypto.randomUUID()}.jpg`;
+  const key = `uploads/${householdId}/${plantId}/${crypto.randomUUID()}.jpg`;
   bucket.put(key, bytes, contentType);
   return { key, imageUrl: `${ASSETS}/${key}` };
+}
+
+/** The key a stored reference names. */
+const keyOf = (imageUrl: string) => imageUrl.slice(ASSETS.length + 1);
+
+/** No version of any object, upload or photo, carries a location. */
+function expectNoLocationAnywhere() {
+  for (const v of bucket.versions) expectNoLocation(v.body, `${v.key} ${v.versionId}`);
 }
 
 beforeEach(async () => {
@@ -184,10 +200,104 @@ describe('a member upload', () => {
     });
     expect(confirmed.statusCode).toBe(200);
 
+    // The plant points at the server's own copy, under plants/, not at the upload.
     const plant = await plantService.getPlant(householdId, plantId);
-    expect(plant?.imageUrl).toBe(upload.imageUrl);
-    expectNoLocation(bucket.current.get(upload.key)!.body, 'the attached photo');
-    for (const v of versionsFor(householdId, plantId)) expectNoLocation(v.body, v.versionId);
+    expect(plant?.imageUrl).toBeTruthy();
+    expect(plant?.imageUrl).not.toBe(upload.imageUrl);
+    const storedKey = keyOf(plant!.imageUrl!);
+    expect(storedKey.startsWith(`plants/${householdId}/${plantId}/`)).toBe(true);
+    expectNoLocation(bucket.current.get(storedKey)!.body, 'the attached photo');
+    expect(versionsFor(householdId, plantId)).toHaveLength(1);
+    // The upload is gone, and nothing anywhere in the bucket keeps the GPS.
+    expect(bucket.versions.some((v) => v.key === upload.key)).toBe(false);
+    expectNoLocationAnywhere();
+  });
+
+  it('the confirm response names the stored photo as a signed URL, which is what the deployed smoke test reads', async () => {
+    // A deployed API never answers with the stored reference: every `imageUrl`
+    // in a response is swapped for a short-lived signed S3 GET (ADR 0033), and
+    // the confirm response is no exception. The post-deploy smoke test finds
+    // the stored photo's key in that URL, so the shape is pinned here.
+    vi.stubEnv('AWS_REGION', 'us-east-1');
+    vi.stubEnv('AWS_ACCESS_KEY_ID', 'AKIAUPLOADSTRIPTEST');
+    vi.stubEnv('AWS_SECRET_ACCESS_KEY', 'upload-strip-test-secret');
+    vi.stubEnv('IMAGES_BUCKET', 'images-bucket');
+    const { __resetPhotoSigningClientForTests } = await import('../../src/services/photoAccess.js');
+    __resetPhotoSigningClientForTests();
+    try {
+      const plantsHandler = await import('../../src/handlers/plants/handler.js');
+      const plantService = await import('../../src/services/plantService.js');
+      const { householdId, plantId, identity } = await seed();
+      const upload = uploadAs(householdId, plantId, TINY_JPEG, 'image/jpeg');
+
+      const confirmed = await invokeHandler(plantsHandler.confirmImageUpload, {
+        method: 'POST',
+        routeKey: 'POST /plants/{id}/image/confirm',
+        pathParameters: { id: plantId },
+        identity,
+        body: { imageUrl: upload.imageUrl },
+      });
+      expect(confirmed.statusCode).toBe(200);
+
+      const storedKey = keyOf((await plantService.getPlant(householdId, plantId))!.imageUrl!);
+      expect(storedKey.startsWith(`plants/${householdId}/${plantId}/`)).toBe(true);
+      const body = confirmed.body as { imageUrl: string; photo: { imageUrl: string } };
+      for (const url of [body.imageUrl, body.photo.imageUrl]) {
+        const signed = new URL(url);
+        expect(signed.searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
+        expect(decodeURIComponent(signed.pathname).endsWith(`/${storedKey}`)).toBe(true);
+        // Never the upload's holding key.
+        expect(decodeURIComponent(signed.pathname)).not.toContain('/uploads/');
+      }
+    } finally {
+      vi.unstubAllEnvs();
+      __resetPhotoSigningClientForTests();
+    }
+  });
+
+  it('a later write to the upload key does not change the photo the plant shows', async () => {
+    const plantsHandler = await import('../../src/handlers/plants/handler.js');
+    const plantService = await import('../../src/services/plantService.js');
+    const { householdId, plantId, identity } = await seed();
+    const upload = uploadAs(householdId, plantId, TINY_JPEG, 'image/jpeg');
+    const confirm = () =>
+      invokeHandler(plantsHandler.confirmImageUpload, {
+        method: 'POST',
+        routeKey: 'POST /plants/{id}/image/confirm',
+        pathParameters: { id: plantId },
+        identity,
+        body: { imageUrl: upload.imageUrl },
+      });
+    expect((await confirm()).statusCode).toBe(200);
+    const shown = (await plantService.getPlant(householdId, plantId))!.imageUrl!;
+
+    // The upload URL has not expired yet, and other bytes arrive at its key.
+    bucket.put(upload.key, Buffer.from('<html>not a photo</html>'), 'image/jpeg');
+
+    expect(Buffer.from(bucket.current.get(keyOf(shown))!.body).equals(TINY_JPEG)).toBe(true);
+    // Confirming again checks the new bytes on their own, refuses them, and
+    // leaves the plant as it was.
+    expect((await confirm()).statusCode).toBe(400);
+    expect((await plantService.getPlant(householdId, plantId))?.imageUrl).toBe(shown);
+    expect(await plantService.getPlantPhotos(householdId, plantId)).toHaveLength(1);
+    expect(bucket.versions.some((v) => v.key === upload.key)).toBe(false);
+  });
+
+  it('a stored photo cannot be confirmed as if it were an upload', async () => {
+    const plantsHandler = await import('../../src/handlers/plants/handler.js');
+    const plantService = await import('../../src/services/plantService.js');
+    const { householdId, plantId, identity } = await seed();
+    const key = `plants/${householdId}/${plantId}/${crypto.randomUUID()}.jpg`;
+    bucket.put(key, TINY_JPEG, 'image/jpeg');
+    const confirmed = await invokeHandler(plantsHandler.confirmImageUpload, {
+      method: 'POST',
+      routeKey: 'POST /plants/{id}/image/confirm',
+      pathParameters: { id: plantId },
+      identity,
+      body: { imageUrl: `${ASSETS}/${key}` },
+    });
+    expect(confirmed.statusCode).toBe(400);
+    expect(await plantService.getPlantPhotos(householdId, plantId)).toEqual([]);
   });
 
   it('an iPhone HEIC with GPS is refused, not attached, and nothing of it is kept', async () => {
@@ -206,7 +316,7 @@ describe('a member upload', () => {
     expect(confirmed.statusCode).toBe(400);
     expect((await plantService.getPlant(householdId, plantId))?.imageUrl ?? null).toBeNull();
     expect(await plantService.getPlantPhotos(householdId, plantId)).toEqual([]);
-    expect(versionsFor(householdId, plantId)).toEqual([]);
+    expect(bucket.versions).toEqual([]);
   });
 });
 
@@ -231,13 +341,18 @@ describe('a caretaker upload', () => {
       });
 
     const jpeg = uploadAs(householdId, plantId, phoneJpeg(), 'image/jpeg');
-    expect((await confirm(jpeg.imageUrl)).statusCode).toBe(200);
-    expectNoLocation(bucket.current.get(jpeg.key)!.body, 'the caretaker photo');
+    const confirmed = await confirm(jpeg.imageUrl);
+    expect(confirmed.statusCode).toBe(200);
+    const stored = versionsFor(householdId, plantId);
+    expect(stored).toHaveLength(1);
+    expectNoLocation(stored[0].body, 'the caretaker photo');
+    expect(bucket.versions.some((v) => v.key === jpeg.key)).toBe(false);
 
     const heic = uploadAs(householdId, plantId, iphoneHeicWithGps(), 'image/jpeg');
     expect((await confirm(heic.imageUrl)).statusCode).toBe(400);
     expect(bucket.versions.some((v) => v.key === heic.key)).toBe(false);
-    for (const v of versionsFor(householdId, plantId)) expectNoLocation(v.body, v.versionId);
+    expect(versionsFor(householdId, plantId)).toHaveLength(1);
+    expectNoLocationAnywhere();
   });
 });
 

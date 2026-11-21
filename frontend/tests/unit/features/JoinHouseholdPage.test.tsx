@@ -62,6 +62,23 @@ describe('JoinHouseholdPage', () => {
     );
   });
 
+  it('is a main landmark with a level-one heading', async () => {
+    // The page had no landmark and its title was an h2.
+    useAuthStore.setState({ isAuthenticated: false, user: null } as never);
+    server.use(
+      http.get(`${API}/households/invites/code-public`, () =>
+        HttpResponse.json({ valid: true, household: { id: 'hh-9', name: 'The Brikis' } })
+      )
+    );
+
+    renderJoin('code-public');
+
+    await screen.findByText(/invited to join/i);
+    expect(screen.getByRole('main')).toContainElement(
+      screen.getByRole('heading', { level: 1, name: 'Join Household' })
+    );
+  });
+
   it('refreshes the token after joining so the new household claim lands (the add-plant 403 fix)', async () => {
     let refreshCalls = 0;
     server.use(
