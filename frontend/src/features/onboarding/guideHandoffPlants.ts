@@ -11,9 +11,10 @@ import type { CommonPlant } from './commonPlants';
  *
  * A plant goes here only when its guide states a watering interval that a
  * cited source gives; `waterEveryDays` is the low end of that interval. A
- * guide that gives a soil rule and no day count gets no entry, and its
- * visitors get plain `/register`: nothing is guessed. `guideHandoffPlants.test`
- * holds each entry to its guide.
+ * guide that gives a soil rule and no day count gets no entry: its visitors
+ * are carried by name since 2026-11-21, and pick their own starting rhythm in
+ * the first run, so nothing is guessed. `guideHandoffPlants.test` holds each
+ * entry to its guide.
  *
  *  - rosemary (2026-11-05): UF/IFAS Gardening Solutions gives "about once
  *    every week or so" for the holiday rosemary topiary, so 7 days.

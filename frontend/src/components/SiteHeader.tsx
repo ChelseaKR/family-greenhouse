@@ -6,7 +6,10 @@ import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { isNativeApp } from '@/lib/platform';
 import { IS_BETA, BETA_BADGE } from '@/lib/betaMode';
 import { contentCtaContext, trackGoogleConversion } from '@/services/googleAnalytics';
-import { registerHrefForPlant } from '@/features/onboarding/guidePlantHandoff';
+import {
+  registerHrefForGuide,
+  registerHrefForPlant,
+} from '@/features/onboarding/guidePlantHandoff';
 
 /**
  * The one site header, on the home page and every public content page
@@ -44,13 +47,17 @@ export function SiteHeader({ plain = false, showBetaBadge = false }: SiteHeaderP
   const showPricing = !isNativeApp();
   const onHome = pathname === '/';
   // On a care guide or pet-safe page, "Sign up free" carries the page's plant
-  // the same way the page's own sign-up links do, so the first run can offer
-  // it first. Any other page is plain /register.
+  // the same way the page's own sign-up links do: every guide's plant from a
+  // guide, a preset plant from a pet-safety page. Any other page is plain
+  // /register.
   const ctaContext = contentCtaContext(pathname);
-  const registerHref =
-    ctaContext.plant && (ctaContext.source === 'care_guide' || ctaContext.source === 'pet_safe')
-      ? registerHrefForPlant(ctaContext.plant)
-      : '/register';
+  const registerHref = !ctaContext.plant
+    ? '/register'
+    : ctaContext.source === 'care_guide'
+      ? registerHrefForGuide(ctaContext.plant)
+      : ctaContext.source === 'pet_safe'
+        ? registerHrefForPlant(ctaContext.plant)
+        : '/register';
 
   const links: Array<[label: string, to: string]> = [
     [t('publicShell.careGuides'), '/care'],

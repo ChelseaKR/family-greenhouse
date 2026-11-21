@@ -17,7 +17,12 @@ import { EmptyPlants } from '@/components/illustrations/EmptyPlants';
 import { toast } from '@/store/toastStore';
 import type { FirstRunVariant } from './firstRunModel';
 import { CommonPlantPicker } from './CommonPlantPicker';
-import { clearPendingGuidePlant, getPendingGuidePlant } from './guidePlantHandoff';
+import { findCareGuideEntry } from '@/features/care/careGuideContent';
+import {
+  clearPendingGuidePlant,
+  getPendingGuidePlant,
+  getPendingGuideSlug,
+} from './guidePlantHandoff';
 
 const makeFirstPlantSchema = (t: TFunction) =>
   z.object({
@@ -114,6 +119,16 @@ export function FirstPlantStep({
   // once; it is cleared as soon as the step is left by any route, so it is
   // offered in this first run and nowhere else.
   const [guidePlant] = useState(getPendingGuidePlant);
+  // Any other care guide's plant (IA decision D3, 2026-11-21): its name goes
+  // into the "Something else?" form below, and its watering rhythm is the
+  // visitor's own pick in the existing "Start with a watering reminder" step,
+  // because the guide gives a soil rule and no cited day count. No species is
+  // filled in, so no curated bundle is matched for them either.
+  const [namedGuide] = useState(() => {
+    if (getPendingGuidePlant()) return undefined;
+    const slug = getPendingGuideSlug();
+    return slug ? findCareGuideEntry(slug) : undefined;
+  });
   const leave = (next: () => void) => () => {
     clearPendingGuidePlant();
     next();
@@ -124,7 +139,10 @@ export function FirstPlantStep({
     handleSubmit,
     watch,
     formState: { errors },
-  } = useForm<FirstPlantFormData>({ resolver: zodResolver(schema) });
+  } = useForm<FirstPlantFormData>({
+    resolver: zodResolver(schema),
+    defaultValues: namedGuide ? { name: namedGuide.commonName } : undefined,
+  });
 
   const speciesValue = watch('species') ?? '';
 
@@ -187,15 +205,22 @@ export function FirstPlantStep({
       }
       return { plant, scheduled, scheduleFailed, startedEveryDays };
     },
-    onSuccess: ({ plant, scheduled, scheduleFailed, startedEveryDays }) => {
+    onSuccess: ({ plant, scheduled, scheduleFailed, startedEveryDays }, submitted) => {
       // Mirrors AddPlantPage's event so the activation funnel counts a
       // first-run plant and a plant added the long way as the same thing.
       track('plant_added', { ordinal: 'first' });
       // GA4 `household_activated`; see AddPlantPage. Carries no plant data.
       trackGoogleConversion({ name: 'household_activated' });
       // Once per account, as the server decided; see AddPlantPage.
+      // A guide's plant added under the name it was carried with counts as a
+      // guide handoff, as a tap on a preset guide plant does.
       if (plant.firstPlantForAccount === true) {
-        trackGoogleConversion({ name: 'first_plant_added', method: 'typed' });
+        const fromGuide =
+          namedGuide !== undefined && submitted.name.trim() === namedGuide.commonName;
+        trackGoogleConversion({
+          name: 'first_plant_added',
+          method: fromGuide ? 'guide_handoff' : 'typed',
+        });
       }
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });

@@ -15,7 +15,7 @@ import { DEFAULT_OG_IMAGE } from '@/config/seo';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { formatContentDate } from '@/utils/contentDate';
 import { PlantShopLink } from '@/features/plantShop/PlantShopLink';
-import { registerHrefForPlant } from '@/features/onboarding/guidePlantHandoff';
+import { registerHrefForGuide } from '@/features/onboarding/guidePlantHandoff';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { careGuideHeading, type CareGuide } from './careGuides';
 import { HolidayCareGuides } from './HolidayCareGuides';
@@ -316,10 +316,10 @@ export function CareGuidePage() {
     .map((relatedSlug) => findCareGuideEntry(relatedSlug))
     .filter((g): g is CareGuideIndexEntry => g !== undefined);
 
-  // Both sign-up links carry the plant to the first run when it can offer it
+  // Both sign-up links carry the plant to the first run, from every guide
   // (features/onboarding/guidePlantHandoff), and both are counted in GA4
   // under the content-page parameters, never the home page's `cta`.
-  const registerHref = registerHrefForPlant(guide.slug);
+  const registerHref = registerHrefForGuide(guide.slug);
   const trackCareCta = (placement: 'glance' | 'body') =>
     trackGoogleConversion({
       name: 'landing_cta_click',

@@ -9,7 +9,11 @@ import { track } from '@/services/analytics';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { server } from '../../msw/server';
 import { getPendingReferralCode } from '@/features/referrals/pendingReferralCode';
-import { getPendingGuidePlant } from '@/features/onboarding/guidePlantHandoff';
+import {
+  getPendingGuidePlant,
+  getPendingGuideSlug,
+  setPendingGuidePlant,
+} from '@/features/onboarding/guidePlantHandoff';
 
 vi.mock('@/services/analytics', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/analytics')>();
@@ -67,16 +71,29 @@ describe('RegisterPage', () => {
     }
   });
 
-  it('shows no plant line without a plant, or for a guide the first run cannot offer (negative control)', () => {
+  it('shows no plant line without a plant, or for a guide with no preset (negative control)', () => {
     sessionStorage.clear();
     renderPage('/register');
     expect(screen.queryByTestId('guide-plant-next')).toBeNull();
     cleanup();
     renderPage('/register?plant=bird-of-paradise');
-    // The control applied: the page rendered, and the value was not carried.
+    // The control applied: the page rendered and names no plant. The guide is
+    // carried to the first run (IA decision D3, 2026-11-21), but not as a
+    // preset, so no translated name or interval is claimed here.
     expect(screen.getByRole('heading', { level: 1, name: /start your greenhouse/i })).toBeVisible();
     expect(screen.queryByTestId('guide-plant-next')).toBeNull();
     expect(getPendingGuidePlant()).toBeUndefined();
+    expect(getPendingGuideSlug()).toBe('bird-of-paradise');
+    sessionStorage.clear();
+  });
+
+  it('names the address’s plant, not an earlier one, when a later guide has no preset', () => {
+    sessionStorage.clear();
+    setPendingGuidePlant('zz-plant');
+    renderPage('/register?plant=peperomia');
+    expect(screen.queryByTestId('guide-plant-next')).toBeNull();
+    expect(getPendingGuideSlug()).toBe('peperomia');
+    sessionStorage.clear();
   });
 
   it('ignores a plant value that is not one of the first run’s plants', () => {

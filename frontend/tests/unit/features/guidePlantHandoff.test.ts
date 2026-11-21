@@ -1,11 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  carriedGuideSlug,
   clearPendingGuidePlant,
   getPendingGuidePlant,
+  getPendingGuideSlug,
   guidePlant,
+  registerHrefForGuide,
   registerHrefForPlant,
   setPendingGuidePlant,
 } from '@/features/onboarding/guidePlantHandoff';
+import { CARE_GUIDES } from '@/features/care/careGuides';
 import { COMMON_PLANTS } from '@/features/onboarding/commonPlants';
 import { GUIDE_HANDOFF_PLANTS } from '@/features/onboarding/guideHandoffPlants';
 
@@ -42,6 +46,27 @@ describe('guidePlantHandoff', () => {
     expect(registerHrefForPlant('not a plant & more')).toBe('/register');
   });
 
+  it('links every published guide to /register?plant=<slug> (IA decision D3)', () => {
+    expect(CARE_GUIDES.length).toBeGreaterThanOrEqual(64);
+    for (const guide of CARE_GUIDES) {
+      expect(registerHrefForGuide(guide.slug), guide.slug).toBe(`/register?plant=${guide.slug}`);
+      expect(carriedGuideSlug(guide.slug), guide.slug).toBe(guide.slug);
+    }
+    for (const value of ['not-a-guide', 'ZZ-PLANT', '"><script>', '']) {
+      expect(registerHrefForGuide(value), value).toBe('/register');
+      expect(carriedGuideSlug(value), value).toBeUndefined();
+    }
+  });
+
+  it('keeps a guide without a cited day count for the visit, but never as a preset', () => {
+    setPendingGuidePlant('bird-of-paradise');
+    expect(getPendingGuideSlug()).toBe('bird-of-paradise');
+    // No one-tap preset, so no interval: the first run names it instead.
+    expect(getPendingGuidePlant()).toBeUndefined();
+    clearPendingGuidePlant();
+    expect(getPendingGuideSlug()).toBeUndefined();
+  });
+
   it('keeps a known plant for the visit and reads it back', () => {
     setPendingGuidePlant('monstera');
     expect(getPendingGuidePlant()?.slug).toBe('monstera');
@@ -54,6 +79,7 @@ describe('guidePlantHandoff', () => {
     expect(sessionStorage.getItem('fg.pendingGuidePlant')).toBeNull();
     sessionStorage.setItem('fg.pendingGuidePlant', 'javascript:alert(1)');
     expect(getPendingGuidePlant()).toBeUndefined();
+    expect(getPendingGuideSlug()).toBeUndefined();
   });
 
   it('degrades to "no plant" when storage throws', () => {

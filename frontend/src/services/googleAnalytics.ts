@@ -431,8 +431,9 @@ export function contentCtaContext(pathname: string): {
  * `dashboard_empty` is a tap on the same shortcut in the dashboard's empty
  * "Your plants" card, which is where a household that skipped the first run
  * meets it. `guide_handoff` is a tap, in the first run, on the plant whose
- * care guide the visitor signed up from (`/register?plant=<slug>`); which
- * plant it was is still not sent.
+ * care guide the visitor signed up from (`/register?plant=<slug>`), or the
+ * name form submitted with the name such a guide filled in; which plant it
+ * was is still not sent.
  */
 export const FIRST_PLANT_METHODS = [
   'common_plant',

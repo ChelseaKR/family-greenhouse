@@ -6,7 +6,7 @@ import { CareGuidePage } from '@/features/care/CareGuidePage';
 import { CARE_GUIDES } from '@/features/care/careGuides';
 import { sentenceName } from '@/features/care/plantNames';
 import { wateringAnswer } from '@/features/care/wateringAnswer';
-import { registerHrefForPlant } from '@/features/onboarding/guidePlantHandoff';
+import { registerHrefForGuide } from '@/features/onboarding/guidePlantHandoff';
 import { PET_TOXICITY } from '../../../../backend/src/models/petToxicity';
 
 /**
@@ -367,7 +367,8 @@ describe('CareGuidePage answer and call to action', () => {
 
       // The site header's own sign-up link is chrome. The page body has two,
       // both to the same place: one beside the water answer, one in the box.
-      const href = registerHrefForPlant(guide.slug);
+      const href = registerHrefForGuide(guide.slug);
+      expect(href, guide.slug).toBe(`/register?plant=${guide.slug}`);
       const registers = container.querySelectorAll('main a[href^="/register"]');
       expect(
         [...registers].map((a) => a.getAttribute('href')),
@@ -418,13 +419,15 @@ describe('CareGuidePage heading', () => {
 });
 
 describe('CareGuidePage sign-up links carry the plant', () => {
-  it('sends a first-run plant to /register?plant=<slug>, and any other plant to /register', () => {
+  it('sends every guide’s plant to /register?plant=<slug>, preset or not', () => {
     for (const [slug, expected] of [
       ['zz-plant', '/register?plant=zz-plant'],
       ['monstera', '/register?plant=monstera'],
       ['aloe-vera', '/register?plant=aloe-vera'],
-      // Not one of the first run's one-tap plants: nothing to carry.
-      ['bird-of-paradise', '/register'],
+      // Not one of the first run's one-tap plants: carried since 2026-11-21,
+      // and the first run starts with its name instead (IA decision D3).
+      ['bird-of-paradise', '/register?plant=bird-of-paradise'],
+      ['peperomia', '/register?plant=peperomia'],
     ] as const) {
       const { container, unmount } = renderGuide(slug);
       const hrefs = [...container.querySelectorAll('main a[href^="/register"]')].map((a) =>
