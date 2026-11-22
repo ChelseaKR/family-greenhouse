@@ -1783,11 +1783,11 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Chamaedorea elegans',
     alsoKnownAs: ['Parlour Palm', 'Neanthe Bella Palm', 'Good Luck Palm', 'Chamaedorea'],
     related: ['money-tree', 'sago-palm', 'zz-plant'],
-    metaTitle: 'Parlor Palm Care: Watering, Low Light, and Pet Safety',
+    metaTitle: 'How Often to Water a Parlor Palm: When the Surface Is Dry',
     metaDescription:
-      'How often to water a parlor palm, why it works in low light, what brown tips mean, and why it is one of the best pet-safe plants you can buy.',
+      'Water a parlor palm when the surface of the soil has dried, less in winter. It tolerates low light. The ASPCA lists it as non-toxic to cats and dogs.',
     reviewed: '2026-11-03',
-    updated: '2026-11-03',
+    updated: '2026-11-21',
     summary:
       'The parlor palm has been the standard indoor palm since the Victorians, and for good reason: it handles low light, it’s genuinely pet-safe, and it looks tropical while asking for almost nothing.',
     quickFacts: {
@@ -3562,9 +3562,9 @@ export const CARE_GUIDES: CareGuide[] = [
     metaTitle: 'How Often to Water a Cyclamen: When the Surface Is Dry',
     heading: 'Cyclamen care: how often to water it',
     metaDescription:
-      'Water a cyclamen when the soil surface is dry, at the edge of the pot or from below, never on the tuber. Keep it cool and bright to keep it blooming.',
+      'Check a cyclamen’s soil daily and water when the surface is dry, at the edge of the pot or from below, never on the tuber. Keep it cool and bright.',
     reviewed: '2026-11-04',
-    updated: '2026-11-15',
+    updated: '2026-11-21',
     summary:
       'Florist’s cyclamen, Cyclamen persicum, flowers through the winter with swept-back petals over silver-marked, heart-shaped leaves. It wants a cool, bright room and soil that stays moist but never wet, and it goes dormant after flowering. The ASPCA lists it as toxic to cats and dogs.',
     quickFacts: {
