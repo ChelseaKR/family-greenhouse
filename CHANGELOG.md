@@ -73,6 +73,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   stay. No URL, title or page content changes, and the header and footer stay
   hidden inside the apps. Every label was already in English and Spanish.
 
+- **Every care guide carries its plant into sign-up.** A guide's "Remind me to
+  water my …" link, its sign-up box and the header button now go to
+  `/register?plant=<slug>` from all 64 guides, not 11. A guide whose sources
+  give a cited day count keeps its one-tap preset with that count. For the
+  rest, the first run fills the plant's name into its "Something else?" form
+  (in Spanish where the catalog already has that plant's name) and leaves the rhythm to the existing "Start with a watering reminder"
+  step, a starting point the visitor chooses, so no interval is guessed. Pet
+  pages are unchanged. Such a plant added under the carried name counts as
+  `first_plant_added` with `method: guide_handoff`. No new copy.
+
 ### Fixed
 
 - **A selected chip or view toggle no longer depends on a pale tint.** The

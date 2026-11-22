@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
+import i18n, { ensureLanguageCatalog } from '@/i18n';
 import { WelcomeFlow } from '@/features/onboarding/WelcomeFlow';
 import { HomeRedirect } from '@/features/onboarding/HomeRedirect';
 import { useAuthStore } from '@/store/authStore';
@@ -13,6 +14,7 @@ import { server } from '../../msw/server';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
 import {
   getPendingGuidePlant,
+  getPendingGuideSlug,
   setPendingGuidePlant,
 } from '@/features/onboarding/guidePlantHandoff';
 
@@ -816,6 +818,123 @@ describe('WelcomeFlow plant carried from a care guide', () => {
     expect(container.querySelector('[data-suggested]')).toBeNull();
     expect(container.innerHTML).not.toContain('onerror');
     expect(screen.getAllByRole('listitem')[0]!.textContent).toBe('Pothos');
+  });
+});
+
+/**
+ * Every care guide carries its plant (IA decision D3, 2026-11-21). A guide
+ * whose sources give a soil rule and no cited day count is not a one-tap
+ * preset: the first run fills its name into the "Something else?" form and
+ * the visitor picks the rhythm in the existing "Start with a watering
+ * reminder" step. No interval is guessed for them.
+ */
+describe('WelcomeFlow plant named from a guide without a cited day count', () => {
+  function capturePlants() {
+    const created: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(`${API}/plants`, async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        created.push(body);
+        return HttpResponse.json({
+          id: 'p-new',
+          name: body.name,
+          householdId: 'hh-1',
+          firstPlantForAccount: true,
+        });
+      })
+    );
+    return created;
+  }
+
+  afterEach(() => sessionStorage.clear());
+
+  it('names the plant in the form, offers the starting-point step and no preset', async () => {
+    setPendingGuidePlant('peperomia');
+    newHouseholdHandlers();
+    const created = capturePlants();
+    renderFirstRun();
+
+    expect(await screen.findByLabelText(/plant name/i)).toHaveValue('Peperomia');
+    expect(screen.getByLabelText(/species/i)).toHaveValue('');
+    expect(screen.getByRole('group', { name: /start with a watering reminder/i })).toBeVisible();
+    // Not a preset: no "you came from" line, and the one-tap list is as usual.
+    expect(screen.queryByTestId('guide-plant-note')).toBeNull();
+    expect(screen.getAllByRole('listitem')[0]!.textContent).toBe('Pothos');
+    expect(created).toEqual([]);
+  });
+
+  it('adds it with the rhythm the visitor chose and counts it as a guide handoff', async () => {
+    const user = userEvent.setup();
+    setPendingGuidePlant('peperomia');
+    newHouseholdHandlers();
+    const created = capturePlants();
+    renderFirstRun();
+
+    await user.click(await screen.findByRole('radio', { name: /drought-tolerant/i }));
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+    await screen.findByRole('heading', { name: /share the care/i });
+
+    expect(created).toEqual([{ name: 'Peperomia' }]);
+    expect(createdTasks[0]).toMatchObject({ type: 'water', frequency: 21 });
+    expect(vi.mocked(trackGoogleConversion).mock.calls).toEqual([
+      [{ name: 'household_activated' }],
+      [{ name: 'first_plant_added', method: 'guide_handoff' }],
+    ]);
+    expect(getPendingGuideSlug()).toBeUndefined();
+  });
+
+  it('counts a renamed plant as typed (negative control)', async () => {
+    const user = userEvent.setup();
+    setPendingGuidePlant('peperomia');
+    newHouseholdHandlers();
+    const created = capturePlants();
+    renderFirstRun();
+
+    const name = await screen.findByLabelText(/plant name/i);
+    await user.clear(name);
+    await user.type(name, 'Desk plant');
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+    await screen.findByRole('heading', { name: /share the care/i });
+
+    expect(created).toEqual([{ name: 'Desk plant' }]);
+    expect(vi.mocked(trackGoogleConversion).mock.calls[1]).toEqual([
+      { name: 'first_plant_added', method: 'typed' },
+    ]);
+  });
+
+  it('fills the Spanish name the catalog already has, and English otherwise', async () => {
+    await ensureLanguageCatalog('es');
+    await i18n.changeLanguage('es');
+    try {
+      setPendingGuidePlant('poinsettia');
+      newHouseholdHandlers();
+      renderFirstRun();
+      // careHolidayGuides.poinsettia, already in both catalogs.
+      expect(await screen.findByLabelText(/nombre de la planta/i)).toHaveValue('Flor de Pascua');
+      cleanup();
+      sessionStorage.clear();
+
+      // No Spanish name in the catalog for this guide: its English common name.
+      setPendingGuidePlant('peperomia');
+      newHouseholdHandlers();
+      renderFirstRun();
+      expect(await screen.findByLabelText(/nombre de la planta/i)).toHaveValue('Peperomia');
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
+  it('keeps the guide’s English name for an English visitor', async () => {
+    setPendingGuidePlant('poinsettia');
+    newHouseholdHandlers();
+    renderFirstRun();
+    expect(await screen.findByLabelText(/plant name/i)).toHaveValue('Poinsettia');
+  });
+
+  it('leaves the name empty without a carried guide (negative control)', async () => {
+    newHouseholdHandlers();
+    renderFirstRun();
+    expect(await screen.findByLabelText(/plant name/i)).toHaveValue('');
   });
 });
 

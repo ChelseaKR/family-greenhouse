@@ -22,6 +22,9 @@ import { CareGuidePage } from '@/features/care/CareGuidePage';
 import { BlogPost } from '@/features/blog/BlogPost';
 import { POSTS } from '@/features/blog/posts';
 import { PetSafePlantPage } from '@/features/petsafe/PetSafePlantPage';
+import { PLANT_SAFETY_PAGES } from '@/features/petsafe/plantSafetyPages';
+import { hasCareGuide } from '@/features/care/careGuideSlugs';
+import { guidePlant } from '@/features/onboarding/guidePlantHandoff';
 
 /**
  * Every sign-up link on the content pages search sends people to is counted
@@ -105,13 +108,13 @@ describe('content-page sign-up links are counted', () => {
     ]);
   });
 
-  it('keeps the header link plain where there is no plant the first run can offer (negative control)', async () => {
-    // A real guide outside the first run's list: counted with its plant, as
-    // before, but the link does not promise a plant the first run can't offer.
+  it('carries every guide’s plant in the header link, presets or not', async () => {
+    // A guide whose sources give no day count (IA decision D3, 2026-11-21):
+    // the first run starts with its name and the visitor picks the rhythm.
     const ivy = await clickOn('/care/english-ivy', () =>
       screen.getByRole('link', { name: /sign up free/i })
     );
-    expect(ivy.href).toBe('/register');
+    expect(ivy.href).toBe('/register?plant=english-ivy');
     expect(ivy.sent).toEqual([
       {
         name: 'landing_cta_click',
@@ -120,10 +123,22 @@ describe('content-page sign-up links are counted', () => {
         placement: 'header',
       },
     ]);
+  });
+
+  it('keeps the header link plain where the page carries no plant (negative control)', async () => {
     const blog = await clickOn(`/blog/${POSTS[0]!.slug}`, () =>
       screen.getByRole('link', { name: /sign up free/i })
     );
     expect(blog.href).toBe('/register');
+    // A pet-safety page carries only a preset plant, as before: its pages are
+    // not part of this change.
+    const petPage = PLANT_SAFETY_PAGES.find(
+      (page) => hasCareGuide(page.slug) && !guidePlant(page.slug)
+    )!;
+    const pet = await clickOn(`/pet-safe/${petPage.slug}`, () =>
+      screen.getByRole('link', { name: /sign up free/i })
+    );
+    expect(pet.href).toBe('/register');
   });
 
   it('counts the pet-safety page sign-up link, carrying the plant', async () => {

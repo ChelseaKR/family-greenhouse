@@ -1,11 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  carriedGuideSlug,
   clearPendingGuidePlant,
   getPendingGuidePlant,
+  getPendingGuideSlug,
+  guideNameKey,
   guidePlant,
+  registerHrefForGuide,
   registerHrefForPlant,
   setPendingGuidePlant,
 } from '@/features/onboarding/guidePlantHandoff';
+import { CARE_GUIDES } from '@/features/care/careGuides';
+import en from '@/i18n/locales/en/translation.json';
+import es from '@/i18n/locales/es/translation.json';
 import { COMMON_PLANTS } from '@/features/onboarding/commonPlants';
 import { GUIDE_HANDOFF_PLANTS } from '@/features/onboarding/guideHandoffPlants';
 
@@ -42,6 +49,45 @@ describe('guidePlantHandoff', () => {
     expect(registerHrefForPlant('not a plant & more')).toBe('/register');
   });
 
+  it('links every published guide to /register?plant=<slug> (IA decision D3)', () => {
+    expect(CARE_GUIDES.length).toBeGreaterThanOrEqual(64);
+    for (const guide of CARE_GUIDES) {
+      expect(registerHrefForGuide(guide.slug), guide.slug).toBe(`/register?plant=${guide.slug}`);
+      expect(carriedGuideSlug(guide.slug), guide.slug).toBe(guide.slug);
+    }
+    for (const value of ['not-a-guide', 'ZZ-PLANT', '"><script>', '']) {
+      expect(registerHrefForGuide(value), value).toBe('/register');
+      expect(carriedGuideSlug(value), value).toBeUndefined();
+    }
+  });
+
+  it('keeps a guide without a cited day count for the visit, but never as a preset', () => {
+    setPendingGuidePlant('bird-of-paradise');
+    expect(getPendingGuideSlug()).toBe('bird-of-paradise');
+    // No one-tap preset, so no interval: the first run names it instead.
+    expect(getPendingGuidePlant()).toBeUndefined();
+    clearPendingGuidePlant();
+    expect(getPendingGuideSlug()).toBeUndefined();
+  });
+
+  it('names a non-preset guide plant only from keys both catalogs already hold', () => {
+    const lookup = (catalog: unknown, key: string) =>
+      key
+        .split('.')
+        .reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], catalog);
+    const named = CARE_GUIDES.filter((guide) => guideNameKey(guide.slug));
+    expect(named.map((guide) => guide.slug)).toEqual(
+      expect.arrayContaining(['poinsettia', 'christmas-cactus', 'boston-fern'])
+    );
+    for (const guide of named) {
+      const key = guideNameKey(guide.slug)!;
+      expect(typeof lookup(es, key), key).toBe('string');
+      // The English entry names the same plant as the guide.
+      expect(String(lookup(en, key)).toLowerCase(), key).toBe(guide.commonName.toLowerCase());
+    }
+    expect(guideNameKey('peperomia')).toBeUndefined();
+  });
+
   it('keeps a known plant for the visit and reads it back', () => {
     setPendingGuidePlant('monstera');
     expect(getPendingGuidePlant()?.slug).toBe('monstera');
@@ -54,6 +100,7 @@ describe('guidePlantHandoff', () => {
     expect(sessionStorage.getItem('fg.pendingGuidePlant')).toBeNull();
     sessionStorage.setItem('fg.pendingGuidePlant', 'javascript:alert(1)');
     expect(getPendingGuidePlant()).toBeUndefined();
+    expect(getPendingGuideSlug()).toBeUndefined();
   });
 
   it('degrades to "no plant" when storage throws', () => {

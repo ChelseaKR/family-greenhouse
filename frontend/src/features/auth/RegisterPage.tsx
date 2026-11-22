@@ -19,6 +19,7 @@ import { setPendingConfirmation } from './pendingConfirmation';
 import { safeAppRedirect } from './safeRedirect';
 import { setPendingReferralCode } from '@/features/referrals/pendingReferralCode';
 import {
+  carriedGuideSlug,
   getPendingGuidePlant,
   guidePlant,
   setPendingGuidePlant,
@@ -63,19 +64,20 @@ export function RegisterPage() {
     if (referralCode) setPendingReferralCode(referralCode);
   }, [referralCode]);
   // `?plant=<slug>` from a care guide's sign-up link: kept for this visit so
-  // the first run can offer that plant first (features/onboarding/
-  // guidePlantHandoff). Anything not on the first run's plant list is
-  // ignored there, and the value is never rendered.
+  // the first run can start from that plant (features/onboarding/
+  // guidePlantHandoff). Anything that is not a published guide is ignored
+  // there, and the value is never rendered.
   const guidePlantSlug = searchParams.get('plant');
   useEffect(() => {
     setPendingGuidePlant(guidePlantSlug);
   }, [guidePlantSlug]);
   // The plant named on the page: the one in the address, or one this tab
-  // already carried here (a visitor who went to /login and came back). Only
-  // a slug that matched the first run's list gets this far, and only its
-  // translated name is shown.
+  // already carried here (a visitor who went to /login and came back). It is
+  // named only when it is one of the first run's preset plants, whose
+  // translated names exist; any other guide's plant is carried silently.
   const [storedGuidePlant] = useState(getPendingGuidePlant);
-  const carriedPlant = guidePlant(guidePlantSlug) ?? storedGuidePlant;
+  const addressGuide = carriedGuideSlug(guidePlantSlug);
+  const carriedPlant = addressGuide ? guidePlant(addressGuide) : storedGuidePlant;
 
   if (!PUBLIC_REGISTRATION_AVAILABLE) {
     return (
