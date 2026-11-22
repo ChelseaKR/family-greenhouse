@@ -41,6 +41,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **The parlor palm and cyclamen guides answer the watering question in
+  search results.** The parlor palm guide's title is now "How Often to Water a
+  Parlor Palm: When the Surface Is Dry", and its description gives the guide's
+  watering, low-light and cited ASPCA lines in place of an unsourced "best
+  pet-safe plants" claim. The cyclamen description opens with the guide's
+  daily soil check. No page text, heading or source changed.
+
 - **Five more pet pages answer the animal people search for first.** The
   pothos, peace lily and bird of paradise pages lead with the dog question
   and the anthurium and money tree pages with the cat question, the same way

@@ -157,6 +157,8 @@ describe('CARE_GUIDES registry', () => {
     // the spider plant the odd one out at position 5.
     // The 28 days to 2026-11-06 added five more at positions 7 to 16 with no
     // clicks, so their titles lead the same way.
+    // The 28 days to 2026-11-21 put the parlor palm at 10.6 for "how often to
+    // water parlor palm" (63 US impressions, no clicks), so it leads too.
     for (const slug of [
       'zz-plant',
       'monstera',
@@ -168,6 +170,7 @@ describe('CARE_GUIDES registry', () => {
       'money-tree',
       'nerve-plant',
       'rubber-plant',
+      'parlor-palm',
     ]) {
       expect(findCareGuide(slug)!.metaTitle, slug).toMatch(/^How Often to Water /);
     }
@@ -348,6 +351,9 @@ describe('CARE_GUIDES content dates', () => {
     // Five more gained a winter-watering question on 2026-11-17, restating
     // their own cited text (holidayWording.test.tsx); haworthia, already
     // here, gained one too.
+    // The parlor palm got a new search title and description on 2026-11-21,
+    // restating its own water line and cited ASPCA verdict (cyclamen, already
+    // here, got a new description the same day).
     expect(drifted.map((g) => g.slug).sort()).toEqual([
       'amaryllis',
       'begonia',
@@ -366,11 +372,49 @@ describe('CARE_GUIDES content dates', () => {
       'money-tree',
       'monstera',
       'nerve-plant',
+      'parlor-palm',
       'poinsettia',
       'ponytail-palm',
       'rubber-plant',
       'snake-plant',
     ]);
+  });
+});
+
+/**
+ * Search Console, 28 days to 2026-11-21: "how often to water parlor palm" was
+ * 63 of the parlor palm page's 99 US impressions, at position 10.6, with no
+ * clicks, under a "Parlor Palm Care" title. The title now answers the
+ * question, and the description says only what the page already says: its
+ * water line, its low-light line and its cited ASPCA verdict. It replaces an
+ * unsourced "one of the best pet-safe plants you can buy".
+ */
+describe('parlor palm search snippet', () => {
+  const g = findCareGuide('parlor-palm')!;
+
+  it('answers "how often to water" in the title, with no interval', () => {
+    expect(g.metaTitle).toBe('How Often to Water a Parlor Palm: When the Surface Is Dry');
+    expect(g.metaTitle).not.toMatch(/\b\d+\s*(?:days?|weeks?)\b|\bweekly\b/i);
+    expect(g.faqs[0]!.a).toMatch(/no fixed number of days/);
+  });
+
+  it('says in the description only what the guide’s own facts say', () => {
+    const d = g.metaDescription;
+    expect(d).toMatch(
+      /^Water a parlor palm when the surface of the soil has dried, less in winter\./
+    );
+    expect(g.quickFacts.water).toBe('When the surface of the soil has dried; less in winter');
+    expect(d).toContain('It tolerates low light.');
+    expect(g.quickFacts.light).toContain('tolerates low light');
+    expect(d).toContain('The ASPCA lists it as non-toxic to cats and dogs.');
+    expect(careToxicity(g).sourced).toBe(true);
+    expect(petSafetyLevel(g.quickFacts.toxicity)).toBe('safe');
+    expect(d).not.toMatch(/\bbest\b/i);
+    expect(d.length).toBeLessThanOrEqual(155);
+  });
+
+  it('keeps the H1 as it was', () => {
+    expect(g.heading).toBeUndefined();
   });
 });
 
@@ -895,11 +939,18 @@ describe('holiday guides', () => {
    * with Clemson's interval. A copy edit, so `updated` moved and `reviewed`
    * did not. Norfolk Island pine kept its heading: the longer one pushed the
    * sign-up link below the iPhone SE Safari fold (care-cta-above-fold.spec.ts).
-   * Kalanchoe is unchanged.
+   * Kalanchoe is unchanged. On 2026-11-21 cyclamen got a new description,
+   * another copy edit, so its `updated` moved again.
    */
   const HEADED: Partial<Record<(typeof HOLIDAY)[number], string>> = {
     amaryllis: 'Amaryllis care: how often to water it',
     cyclamen: 'Cyclamen care: how often to water it',
+  };
+  const UPDATED: Record<(typeof HOLIDAY)[number], string> = {
+    amaryllis: '2026-11-15',
+    'norfolk-island-pine': '2026-11-04',
+    cyclamen: '2026-11-21',
+    kalanchoe: '2026-11-04',
   };
 
   it('publishes all four, reviewed on the day the sources were read', () => {
@@ -907,7 +958,7 @@ describe('holiday guides', () => {
       const g = guides[i];
       expect(g, slug).toBeDefined();
       expect(g!.reviewed, slug).toBe('2026-11-04');
-      expect(g!.updated, slug).toBe(HEADED[slug] ? '2026-11-15' : '2026-11-04');
+      expect(g!.updated, slug).toBe(UPDATED[slug]);
       expect(g!.careSources.length, slug).toBeGreaterThanOrEqual(2);
       for (const s of g!.careSources) expect(s.accessed, `${slug}: ${s.url}`).toBe('2026-11-04');
       expect(g!.heading, slug).toBe(HEADED[slug]);
@@ -926,6 +977,16 @@ describe('holiday guides', () => {
       expect(g.metaTitle, g.slug).toMatch(/^How Often to Water /);
       expect(g.faqs[0]!.q, g.slug).toMatch(/^How often should I water /);
     }
+  });
+
+  it('gives the cyclamen description Iowa State’s daily soil check, not a watering interval', () => {
+    // Search Console, 28 days to 2026-11-21: "how often to water cyclamen" and
+    // "cyclamen watering schedule" at positions 6.5 to 10.7. The description
+    // opens with how often to look, which its cited source gives.
+    const d = findCareGuide('cyclamen')!.metaDescription;
+    expect(d).toMatch(/^Check a cyclamen’s soil daily and water when the surface is dry,/);
+    expect(d).toContain('never on the tuber');
+    expect(d.length).toBeLessThanOrEqual(155);
   });
 
   it('keeps every water line short enough for the first screen', () => {
