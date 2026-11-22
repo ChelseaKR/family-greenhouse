@@ -19,9 +19,11 @@ import { registerHrefForPlant } from '@/features/onboarding/guidePlantHandoff';
  * "Sign up free". Below `lg`: the wordmark, "Sign up free" and a Menu whose
  * first item is Log in. Every label is an existing catalog key.
  *
- * Height is the content pages' header as before (py-4 around a 44px target),
- * so the care guide's "Remind me to water…" link stays on the first screen
- * at every viewport in care-cta-above-fold.spec.ts.
+ * Height: py-4 around a 44px target from `sm` up, as the content pages'
+ * header was. Below `sm` the name wraps to two lines beside the button and
+ * the Menu, so the tagline is hidden and the padding is py-3; that keeps
+ * the care guide's "Remind me to water…" link on the first screen at every
+ * viewport in care-cta-above-fold.spec.ts (375x548 included).
  */
 const NAV_LINK =
   'text-sm font-medium text-ink hover:text-primary-700 transition-colors whitespace-nowrap';
@@ -74,12 +76,12 @@ export function SiteHeader({ plain = false, showBetaBadge = false }: SiteHeaderP
     // native shells; env() is 0 in a browser tab.
     <header className="sticky top-0 z-40 border-b border-dew/60 bg-paper/95 pt-[env(safe-area-inset-top)] backdrop-blur-xs print:hidden native-frame:hidden!">
       <nav
-        className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8"
+        className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-8"
         aria-label={t('publicShell.siteNavLabel')}
       >
         <div className="flex min-w-0 items-center gap-2">
           <Link to="/" aria-label={t('publicShell.homeLabel', { tagline: t('brand.tagline') })}>
-            <BrandMark variant="wordmark" size="sm" compactOnMobile />
+            <BrandMark variant="wordmark" size="sm" compactOnMobile hideTaglineOnMobile />
           </Link>
           {showBetaBadge && IS_BETA && (
             <span className="rounded-full bg-accent-100 text-accent-800 text-xs font-semibold px-2 py-0.5 border border-accent-200/70 whitespace-nowrap">

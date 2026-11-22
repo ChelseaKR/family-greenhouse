@@ -19,6 +19,11 @@ interface BrandMarkProps {
   /** Collapse to the greenhouse glyph below 360px so public headers keep
    *  their navigation actions on one line. */
   compactOnMobile?: boolean;
+  /** Hide the tagline below `sm` (640px). The site header uses this so the
+   *  wordmark, "Sign up free" and the Menu fit a 375px phone without the
+   *  header growing taller and pushing a care guide's reminder link below
+   *  the first screen. The tagline stays in the home link's accessible name. */
+  hideTaglineOnMobile?: boolean;
   className?: string;
   name?: string;
 }
@@ -52,6 +57,7 @@ export function BrandMark({
   tone = 'dark',
   size = 'md',
   compactOnMobile = false,
+  hideTaglineOnMobile = false,
   className,
   name = 'Family Greenhouse',
 }: BrandMarkProps) {
@@ -99,7 +105,14 @@ export function BrandMark({
         <span className={clsx('font-serif tracking-tight', s.title, titleColor)}>
           Family Greenhouse
         </span>{' '}
-        <span className={clsx('uppercase tracking-[0.2em]', s.tagline, taglineColor)}>
+        <span
+          className={clsx(
+            'uppercase tracking-[0.2em]',
+            s.tagline,
+            taglineColor,
+            hideTaglineOnMobile && 'max-sm:hidden'
+          )}
+        >
           {t('brand.tagline')}
         </span>
       </span>
