@@ -53,6 +53,16 @@ import {
   readCatalog,
 } from '../../../scripts/check-plant-safety-pages.mjs';
 
+/** The pages whose table entry sets `leadAnimal`, in table order. */
+const LEAD_SLUGS: readonly string[] = [
+  'pothos',
+  'peace-lily',
+  'bird-of-paradise',
+  'anthurium',
+  'money-tree',
+  'christmas-cactus',
+];
+
 afterEach(cleanup);
 
 const entryFor = (slug: string): PetToxicityEntry => {
@@ -390,7 +400,7 @@ describe('the emergency aside', () => {
       const article = container.querySelector('article')!;
       const aside = article.querySelector('aside[data-plant-emergency]');
       const lead = article.querySelector('[data-plant-lead]');
-      expect(lead === null, page.slug).toBe(page.slug !== 'christmas-cactus');
+      expect(lead === null, page.slug).toBe(!LEAD_SLUGS.includes(page.slug));
       expect(lead ? lead.nextElementSibling : article.firstElementChild).toBe(aside);
       for (const verdict of article.querySelectorAll('[data-claim="verdict"]')) {
         expect(
@@ -753,7 +763,7 @@ describe('a cited lead and an unlisted-animal question', () => {
   });
 
   it('no other page carries a lead, and the spider plant FAQ asks about rats', () => {
-    for (const slug of ['spider-plant', 'poinsettia', 'peace-lily']) {
+    for (const slug of ['spider-plant', 'poinsettia', 'snake-plant']) {
       expect(html(slug), slug).not.toContain('data-plant-lead');
     }
     const spider = html('spider-plant');

@@ -39,6 +39,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   The iOS app's native frame is reported separately, as not yet run on a
   device. Linked from `docs/accessibility.md` and the README.
 
+### Changed
+
+- **Five more pet pages answer the animal people search for first.** The
+  pothos, peace lily and bird of paradise pages lead with the dog question
+  and the anthurium and money tree pages with the cat question, the same way
+  the Christmas cactus page leads with cats: the cited ASPCA answer comes
+  ahead of the hotline box, and the title becomes, for example, "Is peace
+  lily toxic to dogs? Listed as toxic". Each animal was picked from US Search
+  Console queries (2026-08-14 to 11-11). The fiddle-leaf fig page cannot lead
+  yet because its ASPCA listing is for the Ficus genus, so it keeps its
+  title. No verdict, note or source changed. The prayer plant care guide's
+  title names Maranta ("How Often to Water a Prayer Plant (Maranta): Evenly
+  Moist"), the name people search it by.
+
 ### Fixed
 
 - **A selected chip or view toggle no longer depends on a pale tint.** The
