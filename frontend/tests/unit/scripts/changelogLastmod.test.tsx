@@ -21,7 +21,7 @@
  * that silently stops matching cannot agree with itself into a pass.
  */
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -112,7 +112,8 @@ describe('/changelog sitemap lastmod', () => {
         <ChangelogPage />
       </MemoryRouter>
     );
-    const rendered = screen.getAllByRole('listitem').length;
+    // The page's own entries; the site footer has list items of its own.
+    const rendered = within(screen.getByRole('main')).getAllByRole('listitem').length;
     expect(readChangelogEntryDates()).toHaveLength(rendered);
     // …and the oracle this file uses sees the same entries the generator does.
     expect(pageDatesFromSource()).toHaveLength(rendered);

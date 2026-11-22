@@ -70,10 +70,10 @@ test.describe('Public plan-status page', () => {
     await expect(page.getByRole('button', { name: /upgrade|subscribe|trial|choose/i })).toHaveCount(
       0
     );
-    await expect(page.getByRole('link', { name: /sign up free/i })).toHaveAttribute(
-      'href',
-      '/register'
-    );
+    // The page's own sign-up link; the site header has its own "Sign up free".
+    await expect(
+      page.getByRole('main').getByRole('link', { name: /sign up free/i })
+    ).toHaveAttribute('href', '/register');
     await expect(page.locator('body')).not.toContainText(/\$\s*\d/);
   });
 

@@ -19,12 +19,10 @@ import {
   BellAlertIcon,
 } from '@heroicons/react/24/outline';
 import { buttonStyles } from '@/components/buttonStyles';
-import { BrandMark } from '@/components/BrandMark';
+import { SiteHeader } from '@/components/SiteHeader';
+import { Footer } from '@/components/Footer';
 import { PricingGrid } from '@/features/pricing/PricingGrid';
-import { useGiftAvailability } from '@/features/gift/useGiftAvailability';
-import { IS_BETA, BETA_BADGE } from '@/lib/betaMode';
 import { TitleUnderline } from '@/components/brand/TitleUnderline';
-import { MemorialFrame } from '@/components/brand/MemorialFrame';
 import { DashboardHeaderArt } from '@/components/headers/DashboardHeaderArt';
 import { WaterDropIcon } from '@/components/icons/WaterDropIcon';
 import { FertilizeIcon } from '@/components/icons/FertilizeIcon';
@@ -35,7 +33,6 @@ import { CalendarLeafIcon } from '@/components/icons/CalendarLeafIcon';
 import { PhoneLeafIcon } from '@/components/icons/PhoneLeafIcon';
 import { GrowthRingsIcon } from '@/components/icons/GrowthRingsIcon';
 import { RootLockIcon } from '@/components/icons/RootLockIcon';
-import { AnalyticsOptOutToggle } from '@/components/AnalyticsOptOutToggle';
 import { useHeroVariant, HERO_EXPERIMENT, type Variant } from '@/lib/experiment';
 import { track, registerSuperProperties } from '@/services/analytics';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
@@ -527,8 +524,6 @@ function SidebarLeafIcon({ className }: { className?: string }) {
 }
 
 export function LandingPage() {
-  // Gift links appear only while a gift can actually be bought.
-  const giftsOffered = useGiftAvailability() === 'available';
   const { t } = useTranslation();
   // A/B test of the hero framing (control vs solo-first). Bucketing is
   // stable per browser; see lib/experiment.ts.
@@ -597,62 +592,9 @@ export function LandingPage() {
 
   return (
     <div className="bg-paper">
-      {/* Navigation */}
-      <header className="absolute inset-x-0 top-0 z-50">
-        <nav className="flex items-center justify-between gap-3 px-4 py-5 sm:p-6 lg:px-8 max-w-7xl mx-auto">
-          <div className="flex lg:flex-1 items-center gap-2 min-w-0">
-            <Link to="/" aria-label={t('publicShell.homeLabel', { tagline: t('brand.tagline') })}>
-              <BrandMark variant="wordmark" size="sm" compactOnMobile />
-            </Link>
-            {IS_BETA && (
-              <span className="rounded-full bg-accent-100 text-accent-800 text-xs font-semibold px-2 py-0.5 border border-accent-200/70 whitespace-nowrap">
-                {BETA_BADGE}
-              </span>
-            )}
-          </div>
-          <div className="hidden lg:flex lg:gap-x-8">
-            <a
-              href="#features"
-              className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors"
-            >
-              {t('landing.nav.features')}
-            </a>
-            <a
-              href="#pricing"
-              className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors"
-            >
-              {t('publicShell.pricing')}
-            </a>
-            {giftsOffered && (
-              <Link
-                to="/gift"
-                className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors"
-              >
-                {t('giftLanding.navLink')}
-              </Link>
-            )}
-          </div>
-          <div className="flex shrink-0 justify-end items-center gap-x-3 sm:gap-x-6 lg:flex-1">
-            <Link
-              to="/login"
-              className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors py-2 whitespace-nowrap"
-            >
-              {t('landing.nav.logIn')}
-            </Link>
-            {PUBLIC_REGISTRATION_AVAILABLE && (
-              <Link
-                to="/register"
-                className={buttonStyles()}
-                onClick={() =>
-                  trackGoogleConversion({ name: 'landing_cta_click', cta: 'nav_signup' })
-                }
-              >
-                {t('auth.signUpFree')}
-              </Link>
-            )}
-          </div>
-        </nav>
-      </header>
+      {/* The one site header, the same as every content page's (SiteHeader.tsx).
+          It is sticky and in the flow, so the hero no longer pads for it. */}
+      <SiteHeader showBetaBadge />
 
       {/* Everything between the site header and the footer is the page's
           main content. Without this the only <main> in the document was the
@@ -665,7 +607,7 @@ export function LandingPage() {
           column, the app mockup bleeding off the right edge (the
           overflow-hidden wrapper crops it). Below lg it stays the
           stacked, centered layout. */}
-        <div className="overflow-hidden bg-paper pt-14">
+        <div className="overflow-hidden bg-paper">
           <div className="py-10 sm:py-32 lg:py-36">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
               <div className="grid grid-cols-1 items-center lg:grid-cols-2 lg:gap-x-16">
@@ -1022,110 +964,8 @@ export function LandingPage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="bg-primary-900">
-        <div className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
-          <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:grid-cols-5">
-            <div className="col-span-2 sm:col-span-3 lg:col-span-1">
-              <Link to="/" aria-label={t('publicShell.homeLabel', { tagline: t('brand.tagline') })}>
-                <BrandMark variant="wordmark" tone="light" />
-              </Link>
-              <p className="mt-4 text-sm text-primary-200">{t('landing.footer.tagline')}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white">{t('landing.footer.product')}</h3>
-              <ul className="mt-4 space-y-2">
-                <li>
-                  <a href="#features" className="text-sm text-primary-200 hover:text-white">
-                    {t('landing.nav.features')}
-                  </a>
-                </li>
-                <li>
-                  <a href="#pricing" className="text-sm text-primary-200 hover:text-white">
-                    {t('publicShell.pricing')}
-                  </a>
-                </li>
-                {giftsOffered && (
-                  <li>
-                    <Link to="/gift" className="text-sm text-primary-200 hover:text-white">
-                      {t('giftLanding.navLink')}
-                    </Link>
-                  </li>
-                )}
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white">{t('landing.footer.learn')}</h3>
-              <ul className="mt-4 space-y-2">
-                <li>
-                  <Link to="/care" className="text-sm text-primary-200 hover:text-white">
-                    {t('landing.footer.plantCareGuides')}
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/pet-safe" className="text-sm text-primary-200 hover:text-white">
-                    {t('landing.footer.petSafeChecker')}
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/blog" className="text-sm text-primary-200 hover:text-white">
-                    {t('publicShell.blog')}
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/changelog" className="text-sm text-primary-200 hover:text-white">
-                    {t('footer.changelog')}
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white">{t('landing.footer.company')}</h3>
-              <ul className="mt-4 space-y-2">
-                <li>
-                  <a
-                    href="mailto:hello@familygreenhouse.net"
-                    className="text-sm text-primary-200 hover:text-white"
-                  >
-                    {t('landing.footer.contact')}
-                  </a>
-                </li>
-                <li>
-                  <Link to="/status" className="text-sm text-primary-200 hover:text-white">
-                    {t('footer.status')}
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white">{t('landing.footer.legal')}</h3>
-              <ul className="mt-4 space-y-2">
-                <li>
-                  <Link to="/legal/privacy" className="text-sm text-primary-200 hover:text-white">
-                    {t('footer.privacy')}
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/legal/terms" className="text-sm text-primary-200 hover:text-white">
-                    {t('footer.terms')}
-                  </Link>
-                </li>
-                <AnalyticsOptOutToggle as="li" />
-              </ul>
-            </div>
-          </div>
-          <div className="mt-12 pt-8 border-t border-primary-700/60 text-center">
-            <p className="text-sm text-primary-200">
-              {t('landing.footer.copyright', { year: new Date().getFullYear() })}
-            </p>
-            <div className="mt-6 flex items-center justify-center gap-4">
-              <MemorialFrame className="h-8 w-32 text-primary-300/50 hidden sm:block" />
-              <p className="text-sm italic text-primary-200">{t('footer.memorial')}</p>
-              <MemorialFrame className="h-8 w-32 text-primary-300/50 hidden sm:block -scale-x-100" />
-            </div>
-          </div>
-        </div>
-      </footer>
+      {/* The one site footer, the same as every content page's (Footer.tsx). */}
+      <Footer />
     </div>
   );
 }

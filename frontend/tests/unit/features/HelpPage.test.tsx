@@ -373,7 +373,8 @@ describe('HelpTopicPage', () => {
   it('sends an unknown topic to a signposted dead end rather than a blank page', () => {
     renderAt('/help/not-a-topic');
     expect(screen.getByText(/We don’t have that topic/i)).toBeInTheDocument();
-    const list = screen.getByRole('list');
+    // The page's own list; the site footer has lists of its own.
+    const list = within(screen.getByRole('main')).getByRole('list');
     expect(within(list).getAllByRole('link').length).toBe(HELP_SECTIONS.length);
     // A valid-looking URL that resolves to nothing must not be indexed.
     expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(
