@@ -16,6 +16,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-11-24
+
+**Every public page has one header and one footer, every care guide carries
+its plant into sign-up, five pet pages and the parlor palm and prayer plant
+guides answer the searched question in their titles, and a draft
+Accessibility Conformance Report is published with the WCAG 2.2 fixes it
+found.** No stored data, Terms,
+Privacy text or infrastructure changed.
+
+<!-- internal: #1152 #1153 #1155 #1156 #1157 #1177 (dependency bumps, no user-facing change) -->
+
 ### Added
 
 - **A way to give an outage household its 14 days.**
